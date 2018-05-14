@@ -97,7 +97,19 @@ namespace ContextMenuOnSolutionExplorer
         {
             UIHierarchy UIH = dte.ToolWindows.SolutionExplorer;
             UIHierarchyItem UIHItem = UIH.UIHierarchyItems.Item(1);
-            UIH.Parent.Caption = UIHItem.Name;
+            UIH.Parent.Caption = getWindowName(UIHItem);
+        }
+
+        private static string getWindowName(UIHierarchyItem uihItem)
+        {
+            var name = uihItem.Name;
+            var pi = uihItem.Object as ProjectItem;
+            if (pi != null && pi.ContainingProject != null)
+            {
+                name = string.Format("{0} ({1})", name, pi.ContainingProject.Name);
+            }
+
+            return name;
         }
 
         private static void openNewScopedExplorerWindow(DTE2 dte)
