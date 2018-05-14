@@ -5,17 +5,15 @@
 //------------------------------------------------------------------------------
 
 using System;
-using System.ComponentModel.Design;
-using System.Globalization;
-using Microsoft.VisualStudio.Shell;
-using Microsoft.VisualStudio.Shell.Interop;
-using EnvDTE80;
-using EnvDTE;
-using System.Text;
-using System.Windows.Forms;
 using System.Collections.Generic;
-using System.Diagnostics;
+using System.ComponentModel.Design;
 using System.Linq;
+
+using EnvDTE;
+
+using EnvDTE80;
+
+using Microsoft.VisualStudio.Shell;
 
 namespace ContextMenuOnSolutionExplorer
 {
@@ -67,15 +65,12 @@ namespace ContextMenuOnSolutionExplorer
             DTE2 dte = (DTE2)this.ServiceProvider.GetService(typeof(DTE));
             renamedExistingSolutionExplorerWindows(dte);
 
-
             // call the "open visual studio new menu view"
-            
-            openNewScopedExplorerWindow(dte);
 
+            openNewScopedExplorerWindow(dte);
 
             // solutionexplorer automatically points to the last one created
             renameCurrentSolutionExplorerWindowToFirstItemInList(dte);
-
 
             //UIHierarchyItem UIHItem = UIH.UIHierarchyItems.Item(1);
             //StringBuilder sb = new StringBuilder();
@@ -96,15 +91,25 @@ namespace ContextMenuOnSolutionExplorer
             //        }
             //    }
             //}
-
-
         }
 
         private static void renameCurrentSolutionExplorerWindowToFirstItemInList(DTE2 dte)
         {
             UIHierarchy UIH = dte.ToolWindows.SolutionExplorer;
             UIHierarchyItem UIHItem = UIH.UIHierarchyItems.Item(1);
-            UIH.Parent.Caption = UIHItem.Name;
+            UIH.Parent.Caption = getWindowName(UIHItem);
+        }
+
+        private static string getWindowName(UIHierarchyItem uihItem)
+        {
+            var name = uihItem.Name;
+            var pi = uihItem.Object as ProjectItem;
+            if (pi != null && pi.ContainingProject != null)
+            {
+                name = string.Format("{0} ({1})", name, pi.ContainingProject.Name);
+            }
+
+            return name;
         }
 
         private static void openNewScopedExplorerWindow(DTE2 dte)
@@ -130,9 +135,12 @@ namespace ContextMenuOnSolutionExplorer
                 }
             }
 
-            for (int i = 0; i < list.Count; i++)
+            if (list.Count > 1)
             {
-                list[i].Caption = $"Solution Explorer {i}";
+                for (int i = 1; i < list.Count; i++)
+                {
+                    list[i].Caption = $"Solution Explorer {i}";
+                }
             }
         }
 
