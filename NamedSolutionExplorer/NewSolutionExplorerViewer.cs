@@ -4,16 +4,17 @@
 // </copyright>
 //------------------------------------------------------------------------------
 
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.Design;
-using System.Linq;
-
 using EnvDTE;
 
 using EnvDTE80;
 
 using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
+
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.Design;
+using System.Linq;
 
 namespace ContextMenuOnSolutionExplorer
 {
@@ -60,6 +61,24 @@ namespace ContextMenuOnSolutionExplorer
             }
         }
 
+        private IVsUIShell GetUIShell()
+        {
+            IVsUIShell uiShell;
+
+            uiShell = (IVsUIShell)this.ServiceProvider.GetService(typeof(SVsUIShell));
+            return uiShell;
+        }
+
+        private void setSolutionExplorerToolWindowCaption(string caption)
+        {
+            IVsWindowFrame frame = null;
+            var shell = GetUIShell();
+
+            shell.FindToolWindow((uint)__VSFINDTOOLWIN.FTW_fFrameOnly, new Guid(ToolWindowGuids.SolutionExplorer), out frame);
+
+            frame.SetProperty((int)__VSFPROPID.VSFPROPID_Caption, caption);
+        }
+
         private void OpenSolutionExplorerView(object sender, EventArgs e)
         {
             DTE2 dte = (DTE2)this.ServiceProvider.GetService(typeof(DTE));
@@ -71,33 +90,21 @@ namespace ContextMenuOnSolutionExplorer
 
             // solutionexplorer automatically points to the last one created
             renameCurrentSolutionExplorerWindowToFirstItemInList(dte);
-
-            //UIHierarchyItem UIHItem = UIH.UIHierarchyItems.Item(1);
-            //StringBuilder sb = new StringBuilder();
-
-            //// Iterate through first level nodes.
-            //foreach (UIHierarchyItem fid in UIHItem.UIHierarchyItems)
-            //{
-            //    sb.AppendLine(fid.Name);
-            //    // Iterate through second level nodes (if they exist).
-            //    foreach (UIHierarchyItem subitem in fid.UIHierarchyItems)
-            //    {
-            //        sb.AppendLine("   " + subitem.Name);
-            //        // Iterate through third level nodes (if they exist).
-            //        foreach (UIHierarchyItem subSubItem in
-            //          subitem.UIHierarchyItems)
-            //        {
-            //            sb.AppendLine("        " + subSubItem.Name);
-            //        }
-            //    }
-            //}
         }
 
-        private static void renameCurrentSolutionExplorerWindowToFirstItemInList(DTE2 dte)
+        private void renameCurrentSolutionExplorerWindowToFirstItemInList(DTE2 dte)
         {
             UIHierarchy UIH = dte.ToolWindows.SolutionExplorer;
+
+            var pa = UIH.Parent;
+
             UIHierarchyItem UIHItem = UIH.UIHierarchyItems.Item(1);
-            UIH.Parent.Caption = getWindowName(UIHItem);
+            var newCaption = getWindowName(UIHItem);
+            UIH.Parent.Caption = newCaption;
+            setSolutionExplorerToolWindowCaption(newCaption);
+
+            //UIH.Parent.SetKind(vsWindowType.vsWindowTypeToolWindow);
+            var fm = UIH.Parent.Object as ToolWindowPane;
         }
 
         private static string getWindowName(UIHierarchyItem uihItem)
