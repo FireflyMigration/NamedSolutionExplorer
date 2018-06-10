@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 
 using Task = System.Threading.Tasks.Task;
 
-namespace ContextMenuOnSolutionExplorer
+namespace NamedSolutionExplorer
 {
     /// <summary>
     /// This is the class that implements the package exposed by this assembly.
@@ -72,10 +72,10 @@ namespace ContextMenuOnSolutionExplorer
         {
             NamedSolutionExplorerViewerService service = null;
 
-            hookEvents();
             await System.Threading.Tasks.Task.Run(() =>
             {
                 service = new NamedSolutionExplorerViewerService(this);
+                hookEvents();
             });
 
             return service;
@@ -85,6 +85,23 @@ namespace ContextMenuOnSolutionExplorer
         {
             _eventsListener = new SolutionEventsListener();
             _eventsListener.OnAfterOpenSolution += SolutionLoaded;
+            _eventsListener.OnBeforeCloseSolution += SolutionBeforeClose;
+        }
+
+        private void SolutionBeforeClose()
+        {
+            SolutionClosedAsync();
+        }
+
+        private async Task SolutionClosedAsync()
+        {
+            // load the saved settings for this solution]
+            await Task.Run(async () =>
+            {
+                var svc = await GetNamedSolutionExplorerService();
+
+                await svc.SaveSettings();
+            });
         }
 
         private async Task<NamedSolutionExplorerViewerService> GetNamedSolutionExplorerService()
@@ -93,12 +110,20 @@ namespace ContextMenuOnSolutionExplorer
                 NamedSolutionExplorerViewerService;
         }
 
-        private async void SolutionLoaded()
+        private async Task SolutionLoadedAsync()
         {
             // load the saved settings for this solution]
-            var svc = await GetNamedSolutionExplorerService();
+            await Task.Run(async () =>
+           {
+               var svc = await GetNamedSolutionExplorerService();
 
-            await svc.LoadAndApplySettings();
+               await svc.LoadAndApplySettings();
+           });
+        }
+
+        private void SolutionLoaded()
+        {
+            SolutionLoadedAsync();
         }
 
         #endregion Package Members

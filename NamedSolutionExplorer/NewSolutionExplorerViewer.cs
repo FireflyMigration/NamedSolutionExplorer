@@ -4,19 +4,16 @@
 // </copyright>
 //------------------------------------------------------------------------------
 
-using EnvDTE;
-
-using EnvDTE80;
-
-using Microsoft.VisualStudio.Shell;
-using Microsoft.VisualStudio.Shell.Interop;
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Linq;
+using EnvDTE;
+using EnvDTE80;
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
 
-namespace ContextMenuOnSolutionExplorer
+namespace NamedSolutionExplorer
 {
     /// <summary>
     /// Command handler

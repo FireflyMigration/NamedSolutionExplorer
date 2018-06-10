@@ -1,9 +1,10 @@
-﻿using System;
-using Microsoft.VisualStudio;
+﻿using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 
-namespace ContextMenuOnSolutionExplorer
+using System;
+
+namespace NamedSolutionExplorer
 {
     /// <summary>
     /// Listens to events
@@ -15,6 +16,8 @@ namespace ContextMenuOnSolutionExplorer
         private uint solutionEventsCookie;
 
         public event Action OnAfterOpenSolution;
+
+        public event Action OnBeforeCloseSolution;
 
         public SolutionEventsListener()
         {
@@ -63,6 +66,7 @@ namespace ContextMenuOnSolutionExplorer
 
         int IVsSolutionEvents.OnBeforeCloseSolution(object pUnkReserved)
         {
+            OnBeforeCloseSolution();
             return VSConstants.S_OK;
         }
 

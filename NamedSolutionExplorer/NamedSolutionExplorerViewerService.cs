@@ -1,44 +1,12 @@
-﻿using EnvDTE;
-
+﻿using System.Threading.Tasks;
+using EnvDTE;
 using Microsoft.VisualStudio.Settings;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Settings;
-
-using Newtonsoft.Json;
-
-using System.Collections.Generic;
-using System.Threading.Tasks;
-
 using Task = System.Threading.Tasks.Task;
 
-namespace ContextMenuOnSolutionExplorer
+namespace NamedSolutionExplorer
 {
-    public class NSESettings
-    {
-        public class aNSE
-        {
-            public string HierarchyId { get; set; }
-            public string Name { get; set; }
-        }
-
-        public static async Task<NSESettings> FromString(string src)
-        {
-            return await Task.Run(() => JsonConvert.DeserializeObject<NSESettings>(src));
-        }
-
-        public List<aNSE> Settings { get; set; } = new List<aNSE>();
-
-        public void Add(aNSE src)
-        {
-            Settings.Add(src);
-        }
-
-        public override string ToString()
-        {
-            return JsonConvert.SerializeObject(this);
-        }
-    }
-
     public class NamedSolutionExplorerViewerService
     {
         public NamedSolutionExplorerViewerService(Package package)
@@ -80,9 +48,36 @@ namespace ContextMenuOnSolutionExplorer
                 var dte = GetDTE();
                 foreach (Window w in dte.Windows)
                 {
+                    if (IsSolutionExplorer(w))
+                    {
+                        AddSolutionExplorer(ret, w);
+                    }
                 }
                 return ret;
             });
+        }
+
+        private void AddSolutionExplorer(NSESettings ret, Window window)
+        {
+            var hierarchyId = GetHierarchyId(window);
+            var name = GetName(window);
+
+            ret.Add(new NSESettings.aNSE(hierarchyId, name));
+        }
+
+        private string GetName(Window window)
+        {
+            return window.Caption;
+        }
+
+        private string GetHierarchyId(Window window)
+        {
+            return window.DocumentData.ToString();
+        }
+
+        private bool IsSolutionExplorer(Window window)
+        {
+            return true;
         }
 
         private async Task<string> GetSolutionIdentifier()
