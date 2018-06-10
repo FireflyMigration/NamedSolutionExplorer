@@ -37,7 +37,6 @@ namespace NamedSolutionExplorer
     [InstalledProductRegistration("#110", "#112", "1.0", IconResourceID = 400)] // Info on this package for Help/About
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [Guid(NewSolutionExplorerViewerPackage.PackageGuidString)]
-    [ProvideService(typeof(NamedSolutionExplorerViewerService), IsAsyncQueryable = true)]
     [SuppressMessage("StyleCop.CSharp.DocumentationRules", "SA1650:ElementDocumentationMustBeSpelledCorrectly", Justification = "pkgdef, VS and vsixmanifest are valid VS terms")]
     public sealed class NewSolutionExplorerViewerPackage : AsyncPackage
     {
@@ -61,11 +60,11 @@ namespace NamedSolutionExplorer
             base.Dispose(disposing);
         }
 
-        protected override Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
+        protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
-            this.AddService(typeof(NamedSolutionExplorerViewerService), CreateServiceAsync, true);
+            await base.InitializeAsync(cancellationToken, progress);
 
-            return Task.FromResult<object>(null);
+            this.AddService(typeof(NamedSolutionExplorerViewerService), CreateServiceAsync, false);
         }
 
         private async Task<object> CreateServiceAsync(IAsyncServiceContainer container, CancellationToken cancellationtoken, Type servicetype)
@@ -74,8 +73,8 @@ namespace NamedSolutionExplorer
 
             await System.Threading.Tasks.Task.Run(() =>
             {
-                service = new NamedSolutionExplorerViewerService(this);
                 hookEvents();
+                service = new NamedSolutionExplorerViewerService(this);
             });
 
             return service;
