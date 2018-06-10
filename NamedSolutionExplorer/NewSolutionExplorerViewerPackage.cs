@@ -63,12 +63,12 @@ namespace NamedSolutionExplorer
 
         protected override Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
-            this.AddService(typeof(NamedSolutionExplorerViewerService), CreateService, true);
+            this.AddService(typeof(NamedSolutionExplorerViewerService), CreateServiceAsync, true);
 
             return Task.FromResult<object>(null);
         }
 
-        private async Task<object> CreateService(IAsyncServiceContainer container, CancellationToken cancellationtoken, Type servicetype)
+        private async Task<object> CreateServiceAsync(IAsyncServiceContainer container, CancellationToken cancellationtoken, Type servicetype)
         {
             NamedSolutionExplorerViewerService service = null;
 
