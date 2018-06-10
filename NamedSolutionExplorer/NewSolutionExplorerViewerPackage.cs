@@ -4,17 +4,15 @@
 // </copyright>
 //------------------------------------------------------------------------------
 
-using System;
-using System.ComponentModel.Design;
-using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
-using System.Runtime.InteropServices;
-using Microsoft.VisualStudio;
-using Microsoft.VisualStudio.OLE.Interop;
 using Microsoft.VisualStudio.Shell;
-using Microsoft.VisualStudio.Shell.Interop;
-using Microsoft.Win32;
+
+using System;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+
+using Task = System.Threading.Tasks.Task;
 
 namespace ContextMenuOnSolutionExplorer
 {
@@ -35,41 +33,74 @@ namespace ContextMenuOnSolutionExplorer
     /// To get loaded into VS, the package must be referred by &lt;Asset Type="Microsoft.VisualStudio.VsPackage" ...&gt; in .vsixmanifest file.
     /// </para>
     /// </remarks>
-    [PackageRegistration(UseManagedResourcesOnly = true)]
+    [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [InstalledProductRegistration("#110", "#112", "1.0", IconResourceID = 400)] // Info on this package for Help/About
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [Guid(NewSolutionExplorerViewerPackage.PackageGuidString)]
+    [ProvideService(typeof(NamedSolutionExplorerViewerService), IsAsyncQueryable = true)]
     [SuppressMessage("StyleCop.CSharp.DocumentationRules", "SA1650:ElementDocumentationMustBeSpelledCorrectly", Justification = "pkgdef, VS and vsixmanifest are valid VS terms")]
-    public sealed class NewSolutionExplorerViewerPackage : Package
+    public sealed class NewSolutionExplorerViewerPackage : AsyncPackage
     {
         /// <summary>
         /// NewSolutionExplorerViewerPackage GUID string.
         /// </summary>
         public const string PackageGuidString = "56b3b1d1-ef94-475a-9744-f701f1731c78";
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="NewSolutionExplorerViewer"/> class.
-        /// </summary>
-        public NewSolutionExplorerViewerPackage()
-        {
-            // Inside this method you can place any initialization code that does not require
-            // any Visual Studio service because at this point the package object is created but
-            // not sited yet inside Visual Studio environment. The place to do all the other
-            // initialization is the Initialize method.
-        }
+        private SolutionEventsListener _eventsListener = null;
 
         #region Package Members
 
-        /// <summary>
-        /// Initialization of the package; this method is called right after the package is sited, so this is the place
-        /// where you can put all the initialization code that rely on services provided by VisualStudio.
-        /// </summary>
-        protected override void Initialize()
+        protected override void Dispose(bool disposing)
         {
-            NewSolutionExplorerViewer.Initialize(this);
-            base.Initialize();
+            if (_eventsListener != null)
+            {
+                _eventsListener.Dispose();
+                _eventsListener = null;
+            }
+
+            base.Dispose(disposing);
         }
 
-        #endregion
+        protected override Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
+        {
+            this.AddService(typeof(NamedSolutionExplorerViewerService), CreateService, true);
+
+            return Task.FromResult<object>(null);
+        }
+
+        private async Task<object> CreateService(IAsyncServiceContainer container, CancellationToken cancellationtoken, Type servicetype)
+        {
+            NamedSolutionExplorerViewerService service = null;
+
+            hookEvents();
+            await System.Threading.Tasks.Task.Run(() =>
+            {
+                service = new NamedSolutionExplorerViewerService(this);
+            });
+
+            return service;
+        }
+
+        private void hookEvents()
+        {
+            _eventsListener = new SolutionEventsListener();
+            _eventsListener.OnAfterOpenSolution += SolutionLoaded;
+        }
+
+        private async Task<NamedSolutionExplorerViewerService> GetNamedSolutionExplorerService()
+        {
+            return await this.GetServiceAsync(typeof(NamedSolutionExplorerViewerService)) as
+                NamedSolutionExplorerViewerService;
+        }
+
+        private async void SolutionLoaded()
+        {
+            // load the saved settings for this solution]
+            var svc = await GetNamedSolutionExplorerService();
+
+            await svc.LoadAndApplySettings();
+        }
+
+        #endregion Package Members
     }
 }

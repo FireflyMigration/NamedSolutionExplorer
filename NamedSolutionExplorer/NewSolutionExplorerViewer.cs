@@ -21,7 +21,7 @@ namespace ContextMenuOnSolutionExplorer
     /// <summary>
     /// Command handler
     /// </summary>
-    internal sealed class NewSolutionExplorerViewer
+    internal class NewSolutionExplorerViewer
     {
         /// <summary>
         /// Command ID.
@@ -96,15 +96,10 @@ namespace ContextMenuOnSolutionExplorer
         {
             UIHierarchy UIH = dte.ToolWindows.SolutionExplorer;
 
-            var pa = UIH.Parent;
-
             UIHierarchyItem UIHItem = UIH.UIHierarchyItems.Item(1);
             var newCaption = getWindowName(UIHItem);
             UIH.Parent.Caption = newCaption;
             setSolutionExplorerToolWindowCaption(newCaption);
-
-            //UIH.Parent.SetKind(vsWindowType.vsWindowTypeToolWindow);
-            var fm = UIH.Parent.Object as ToolWindowPane;
         }
 
         private static string getWindowName(UIHierarchyItem uihItem)
