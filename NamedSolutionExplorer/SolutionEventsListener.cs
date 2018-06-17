@@ -1,5 +1,4 @@
 ﻿using Microsoft.VisualStudio;
-using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 
 using System;
@@ -19,16 +18,11 @@ namespace NamedSolutionExplorer
 
         public event Action OnBeforeCloseSolution;
 
-        public SolutionEventsListener()
+        public SolutionEventsListener(IVsSolution solution)
         {
             InitNullEvents();
 
-            solution = Package.GetGlobalService(typeof(SVsSolution)) as IVsSolution;
-
-            if (solution != null)
-            {
-                solution.AdviseSolutionEvents(this, out solutionEventsCookie);
-            }
+            solution.AdviseSolutionEvents(this, out solutionEventsCookie);
         }
 
         private void InitNullEvents()

@@ -4,7 +4,9 @@
 // </copyright>
 //------------------------------------------------------------------------------
 
+using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
 
 using System;
 using System.Diagnostics.CodeAnalysis;
@@ -36,6 +38,7 @@ namespace NamedSolutionExplorer
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [InstalledProductRegistration("#110", "#112", "1.0", IconResourceID = 400)] // Info on this package for Help/About
     [ProvideMenuResource("Menus.ctmenu", 1)]
+    [ProvideAutoLoad(VSConstants.UICONTEXT.ShellInitialized_string, PackageAutoLoadFlags.BackgroundLoad)]
     [Guid(NewSolutionExplorerViewerPackage.PackageGuidString)]
     [SuppressMessage("StyleCop.CSharp.DocumentationRules", "SA1650:ElementDocumentationMustBeSpelledCorrectly", Justification = "pkgdef, VS and vsixmanifest are valid VS terms")]
     public sealed class NewSolutionExplorerViewerPackage : AsyncPackage
@@ -62,45 +65,45 @@ namespace NamedSolutionExplorer
 
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
-            await base.InitializeAsync(cancellationToken, progress);
+            hookEvents();
 
-            this.AddService(typeof(NamedSolutionExplorerViewerService), CreateServiceAsync, false);
+            AddService(typeof(NamedSolutionExplorerViewerService), CreateService);
+
+            // force the service to load
+            var tmp = await GetServiceAsync(typeof(NamedSolutionExplorerViewerService));
+
+            Console.WriteLine(tmp.ToString());
         }
 
-        private async Task<object> CreateServiceAsync(IAsyncServiceContainer container, CancellationToken cancellationtoken, Type servicetype)
+        private async Task<object> CreateService(IAsyncServiceContainer container, CancellationToken cancellationtoken, Type servicetype)
         {
-            NamedSolutionExplorerViewerService service = null;
+            var svc = new NamedSolutionExplorerViewerService();
+            await svc.InitialiseAsync(this);
+            await svc.LoadAndApplySettings();
 
-            await System.Threading.Tasks.Task.Run(() =>
-            {
-                hookEvents();
-                service = new NamedSolutionExplorerViewerService(this);
-            });
-
-            return service;
+            return svc;
         }
 
-        private void hookEvents()
+        private async void hookEvents()
         {
-            _eventsListener = new SolutionEventsListener();
+            var svc = await GetServiceAsync(typeof(SVsSolution)) as IVsSolution;
+            _eventsListener = new SolutionEventsListener(svc);
             _eventsListener.OnAfterOpenSolution += SolutionLoaded;
             _eventsListener.OnBeforeCloseSolution += SolutionBeforeClose;
         }
 
         private void SolutionBeforeClose()
         {
-            SolutionClosedAsync();
+            Task.Run(async () => { await SolutionClosedAsync(); }).Wait();
         }
 
         private async Task SolutionClosedAsync()
         {
             // load the saved settings for this solution]
-            await Task.Run(async () =>
-            {
-                var svc = await GetNamedSolutionExplorerService();
 
-                await svc.SaveSettings();
-            });
+            var svc = await GetNamedSolutionExplorerService();
+
+            await svc.SaveSettings();
         }
 
         private async Task<NamedSolutionExplorerViewerService> GetNamedSolutionExplorerService()
@@ -122,7 +125,7 @@ namespace NamedSolutionExplorer
 
         private void SolutionLoaded()
         {
-            SolutionLoadedAsync();
+            Task.Run(async () => { await SolutionLoadedAsync(); });
         }
 
         #endregion Package Members

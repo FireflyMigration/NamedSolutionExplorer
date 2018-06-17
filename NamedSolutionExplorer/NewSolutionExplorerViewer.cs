@@ -15,6 +15,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace NamedSolutionExplorer
 {
@@ -33,55 +34,44 @@ namespace NamedSolutionExplorer
         /// </summary>
         public static readonly Guid CommandSet = new Guid("2910728c-1593-479d-9a07-8ee1fe3e8e55");
 
-        /// <summary>
-        /// VS Package that provides this command, not null.
-        /// </summary>
-        private readonly Package package;
+        private AsyncPackage _package;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="NewSolutionExplorerViewer"/> class.
-        /// Adds our command handlers for menu (commands must exist in the command table file)
-        /// </summary>
-        /// <param name="package">Owner package, not null.</param>
-        private NewSolutionExplorerViewer(Package package)
+        public async void InitialiseAsync(AsyncPackage package)
         {
-            if (package == null)
-            {
-                throw new ArgumentNullException("package");
-            }
-
-            this.package = package;
-
-            OleMenuCommandService commandService = this.ServiceProvider.GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
+            _package = package;
+            OleMenuCommandService commandService = await package.GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
             if (commandService != null)
             {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                 var menuCommandID = new CommandID(CommandSet, CommandId);
                 var menuItem = new MenuCommand(this.OpenSolutionExplorerView, menuCommandID);
                 commandService.AddCommand(menuItem);
             }
         }
 
-        private IVsUIShell GetUIShell()
+        private async Task<T> GetService<T>()
         {
-            IVsUIShell uiShell;
-
-            uiShell = (IVsUIShell)this.ServiceProvider.GetService(typeof(SVsUIShell));
-            return uiShell;
+            return (T)await _package.GetServiceAsync(typeof(T));
         }
 
-        private void setSolutionExplorerToolWindowCaption(string caption)
+        private async void setSolutionExplorerToolWindowCaption(string caption)
         {
             IVsWindowFrame frame = null;
-            var shell = GetUIShell();
+            var shell = await GetService<IVsUIShell>();
 
             shell.FindToolWindow((uint)__VSFINDTOOLWIN.FTW_fFrameOnly, new Guid(ToolWindowGuids.SolutionExplorer), out frame);
 
             frame.SetProperty((int)__VSFPROPID.VSFPROPID_Caption, caption);
         }
 
-        private void OpenSolutionExplorerView(object sender, EventArgs e)
+        public void OpenSEV()
         {
-            DTE2 dte = (DTE2)this.ServiceProvider.GetService(typeof(DTE));
+            OpenSolutionExplorerView(null, null);
+        }
+
+        private async void OpenSolutionExplorerView(object sender, EventArgs e)
+        {
+            DTE2 dte = await GetService<DTE>() as DTE2;
             renamedExistingSolutionExplorerWindows(dte);
 
             // call the "open visual studio new menu view"
@@ -144,35 +134,6 @@ namespace NamedSolutionExplorer
                     list[i].Caption = $"Solution Explorer {i}";
                 }
             }
-        }
-
-        /// <summary>
-        /// Gets the instance of the command.
-        /// </summary>
-        public static NewSolutionExplorerViewer Instance
-        {
-            get;
-            private set;
-        }
-
-        /// <summary>
-        /// Gets the service provider from the owner package.
-        /// </summary>
-        private IServiceProvider ServiceProvider
-        {
-            get
-            {
-                return this.package;
-            }
-        }
-
-        /// <summary>
-        /// Initializes the singleton instance of the command.
-        /// </summary>
-        /// <param name="package">Owner package, not null.</param>
-        public static void Initialize(Package package)
-        {
-            Instance = new NewSolutionExplorerViewer(package);
         }
 
         ///// <summary>
