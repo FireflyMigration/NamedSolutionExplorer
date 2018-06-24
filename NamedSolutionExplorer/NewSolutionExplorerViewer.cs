@@ -80,6 +80,13 @@ namespace NamedSolutionExplorer
 
             // solutionexplorer automatically points to the last one created
             renameCurrentSolutionExplorerWindowToFirstItemInList(dte);
+            saveSettings();
+        }
+
+        private async void saveSettings()
+        {
+            var svc = await GetService<NamedSolutionExplorerViewerService>();
+            await svc.SaveSettings();
         }
 
         private void renameCurrentSolutionExplorerWindowToFirstItemInList(DTE2 dte)

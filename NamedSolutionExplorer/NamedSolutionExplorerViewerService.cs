@@ -9,6 +9,7 @@ using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Settings;
 
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 
 using Task = System.Threading.Tasks.Task;
@@ -56,20 +57,6 @@ namespace NamedSolutionExplorer
                     restoreSettings(savedSettings);
                 }
             }
-        }
-
-        private string BuildHierarchyPathForProject(ProjectItem projectItem)
-        {
-            var project = projectItem.ContainingProject;
-            Project current = GetParentProject(project);
-            string path = project.Name;
-            while (current != null)
-            {
-                path = current.Name + "\\" + path;
-                current = GetParentProject(current);
-            }
-
-            return path;
         }
 
         private Project GetParentProject(Project project)
@@ -148,6 +135,7 @@ namespace NamedSolutionExplorer
 
                 // get all NSE windows
                 var dte = GetDTE();
+
                 foreach (Window w in dte.Windows)
                 {
                     if (IsSolutionExplorer(w))
@@ -181,8 +169,37 @@ namespace NamedSolutionExplorer
             UIHierarchyItem firstItem = uiHierarchy.UIHierarchyItems.Item(1);
 
             return GetObjectPath(firstItem);
+        }
 
-            return window.DocumentData?.ToString();
+        public UIHierarchyItem FindItem(UIHierarchyItems Children, string FileName, ref string SolutionExplorerPath)
+        {
+            foreach (UIHierarchyItem CurrentItem in Children)
+            {
+                string TypeName = CurrentItem.Object.GetType().Name;
+                if (TypeName == "ProjectItem")
+                {
+                    EnvDTE.ProjectItem projectitem = (EnvDTE.ProjectItem)CurrentItem.Object;
+                    short i = 1;
+                    while (i <= projectitem.FileCount)
+                    {
+                        if (projectitem.FileNames[i] == FileName)
+                        {
+                            SolutionExplorerPath = CurrentItem.Name;
+                            return CurrentItem;
+                        }
+                        i++;
+                    }
+                }
+
+                UIHierarchyItem ChildItem = FindItem(CurrentItem.UIHierarchyItems, FileName, ref SolutionExplorerPath);
+                if (ChildItem != null)
+                {
+                    SolutionExplorerPath = CurrentItem.Name + @"\" + SolutionExplorerPath;
+                    return ChildItem;
+                }
+            }
+
+            return null;
         }
 
         private string GetObjectPath(UIHierarchyItem tgt)
@@ -194,24 +211,27 @@ namespace NamedSolutionExplorer
                 return name;
             }
 
-            var parent = tgt.Collection.Parent;
-            var sol = parent as Solution;
-            var pi = parent as ProjectItem;
-            var p = parent as Project;
+            var selectedUIHierarchyItem = tgt;
 
-            if (p != null)
+            if (tgt.Object is EnvDTE.Project)
             {
-                return GetObjectPath(p) + "\\" + name;
+                Debug.WriteLine("Project node is selected: " + selectedUIHierarchyItem.Name);
+                var project = tgt.Object as Project;
+                return project.UniqueName;
             }
-
-            if (pi != null)
+            else if (selectedUIHierarchyItem.Object is EnvDTE.ProjectItem)
             {
-                return GetObjectPath(pi) + "\\" + name;
+                Debug.WriteLine("Project item node is selected: " + selectedUIHierarchyItem.Name);
+                var pi = selectedUIHierarchyItem.Object as ProjectItem;
+                return pi.ContainingProject.UniqueName;
             }
-
-            var solutionName = GetDTE().Solution.Properties.Item("Name").Value.ToString();
-
-            return string.Format("{0}\\{1}", solutionName, name);
+            else if (selectedUIHierarchyItem.Object is EnvDTE.Solution)
+            {
+                Debug.WriteLine("Solution node is selected: " + selectedUIHierarchyItem.Name);
+                return null;
+            }
+            Debug.WriteLine("Couldn't identify node type");
+            return null;
         }
 
         private string GetObjectPath(ProjectItem pi)
