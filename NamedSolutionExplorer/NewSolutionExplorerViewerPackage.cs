@@ -4,6 +4,8 @@
 // </copyright>
 //------------------------------------------------------------------------------
 
+using log4net.Config;
+
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
@@ -38,7 +40,7 @@ namespace NamedSolutionExplorer
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [InstalledProductRegistration("#110", "#112", "1.0", IconResourceID = 400)] // Info on this package for Help/About
     [ProvideMenuResource("Menus.ctmenu", 1)]
-    [ProvideAutoLoad(VSConstants.UICONTEXT.ShellInitialized_string, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideAutoLoad(VSConstants.UICONTEXT.SolutionExists_string, PackageAutoLoadFlags.BackgroundLoad)]
     [Guid(NewSolutionExplorerViewerPackage.PackageGuidString)]
     [SuppressMessage("StyleCop.CSharp.DocumentationRules", "SA1650:ElementDocumentationMustBeSpelledCorrectly", Justification = "pkgdef, VS and vsixmanifest are valid VS terms")]
     public sealed class NewSolutionExplorerViewerPackage : AsyncPackage
@@ -89,6 +91,7 @@ namespace NamedSolutionExplorer
             var svc = await GetServiceAsync(typeof(SVsSolution)) as IVsSolution;
             _eventsListener = new SolutionEventsListener(svc);
             _eventsListener.OnAfterOpenSolution += SolutionLoaded;
+
             _eventsListener.OnBeforeCloseSolution += SolutionBeforeClose;
         }
 
@@ -129,5 +132,10 @@ namespace NamedSolutionExplorer
         }
 
         #endregion Package Members
+
+        static NewSolutionExplorerViewerPackage()
+        {
+            XmlConfigurator.Configure();
+        }
     }
 }

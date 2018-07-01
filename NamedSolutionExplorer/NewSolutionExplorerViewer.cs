@@ -8,6 +8,8 @@ using EnvDTE;
 
 using EnvDTE80;
 
+using log4net;
+
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 
@@ -17,6 +19,8 @@ using System.ComponentModel.Design;
 using System.Linq;
 using System.Threading.Tasks;
 
+using Task = System.Threading.Tasks.Task;
+
 namespace NamedSolutionExplorer
 {
     /// <summary>
@@ -24,6 +28,8 @@ namespace NamedSolutionExplorer
     /// </summary>
     internal class NewSolutionExplorerViewer
     {
+        private static ILog _log = LogManager.GetLogger(typeof(NewSolutionExplorerViewer));
+
         /// <summary>
         /// Command ID.
         /// </summary>
@@ -64,23 +70,29 @@ namespace NamedSolutionExplorer
             frame.SetProperty((int)__VSFPROPID.VSFPROPID_Caption, caption);
         }
 
-        public void OpenSEV()
-        {
-            OpenSolutionExplorerView(null, null);
-        }
+        private class DontSaveSettings : EventArgs { }
 
-        private async void OpenSolutionExplorerView(object sender, EventArgs e)
+        public async System.Threading.Tasks.Task OpenSolutionExplorerViewAsync()
         {
             DTE2 dte = await GetService<DTE>() as DTE2;
             renamedExistingSolutionExplorerWindows(dte);
 
             // call the "open visual studio new menu view"
+            await openNewScopedExplorerWindow(dte).ContinueWith(_ =>
+            {
+                // solutionexplorer automatically points to the last one created
 
-            openNewScopedExplorerWindow(dte);
+                renameCurrentSolutionExplorerWindowToFirstItemInList(dte);
+            });
+        }
 
-            // solutionexplorer automatically points to the last one created
-            renameCurrentSolutionExplorerWindowToFirstItemInList(dte);
-            saveSettings();
+        private void OpenSolutionExplorerView(object sender, EventArgs e)
+        {
+            Task.Run(async () =>
+            {
+                await OpenSolutionExplorerViewAsync()
+                    .ContinueWith(_ => saveSettings());
+            });
         }
 
         private async void saveSettings()
@@ -111,16 +123,49 @@ namespace NamedSolutionExplorer
             return name;
         }
 
-        private static void openNewScopedExplorerWindow(DTE2 dte)
+        private static async System.Threading.Tasks.Task openNewScopedExplorerWindow(DTE2 dte)
         {
-            var commands = dte.Commands.Cast<Command>();
-            var openSolutionView =
-                commands.FirstOrDefault(
-                    x => x.Name == "ProjectandSolutionContextMenus.Project.SolutionExplorer.NewScopedWindow");
-            if (openSolutionView != null)
+            await System.Threading.Tasks.Task.Run(async () =>
             {
-                dte.Commands.Raise(openSolutionView.Guid, openSolutionView.ID, null, null);
+                var commands = dte.Commands.Cast<Command>();
+                activateSolutionExplorerWindow(dte);
+                var openSolutionView =
+                    commands.FirstOrDefault(
+                        x => x.Name == "ProjectandSolutionContextMenus.Project.SolutionExplorer.NewScopedWindow");
+                if (openSolutionView != null)
+                {
+                    if (openSolutionView.IsAvailable)
+                    {
+                        dte.Commands.Raise(openSolutionView.Guid, openSolutionView.ID, null, null);
+                        await waitUntilWindowOpened(dte);
+                    }
+                    else
+                    {
+                        _log.Debug("NewScopedWindow not yet available");
+                    }
+                }
+            });
+        }
+
+        private static async System.Threading.Tasks.Task waitUntilWindowOpened(DTE2 dte)
+        {
+            await System.Threading.Tasks.Task.Delay(new TimeSpan(0, 0, 5));
+        }
+
+        private static int getSolutionExplorerWindowsCount(DTE2 dte)
+        {
+            var ret = 0;
+            foreach (Window w in dte.Windows)
+            {
+                if (Utilities.IsSolutionExplorer(w)) ret++;
             }
+
+            return ret;
+        }
+
+        private static void activateSolutionExplorerWindow(DTE2 dte)
+        {
+            dte.Windows.Item(EnvDTE.Constants.vsWindowKindSolutionExplorer).Activate();
         }
 
         private static void renamedExistingSolutionExplorerWindows(DTE2 dte)

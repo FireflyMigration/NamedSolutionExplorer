@@ -6,13 +6,16 @@ using log4net;
 
 using Microsoft.VisualStudio.Settings;
 using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Shell.Settings;
 
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading.Tasks;
 
 using Task = System.Threading.Tasks.Task;
+using Window = EnvDTE.Window;
 
 namespace NamedSolutionExplorer
 {
@@ -20,6 +23,7 @@ namespace NamedSolutionExplorer
     {
         private NewSolutionExplorerViewer _viewer;
         private ILog _log = LogManager.GetLogger(typeof(NamedSolutionExplorerViewerService));
+        private IVsSolution _solutionService;
 
         public NamedSolutionExplorerViewerService()
         {
@@ -28,6 +32,7 @@ namespace NamedSolutionExplorer
 
         public async Task InitialiseAsync(AsyncPackage package)
         {
+            _solutionService = (IVsSolution)await ServiceProvider.GetGlobalServiceAsync(typeof(IVsSolution));
             _viewer.InitialiseAsync(package);
         }
 
@@ -42,55 +47,40 @@ namespace NamedSolutionExplorer
             var solutionId = await GetSolutionIdentifier();
             if (!string.IsNullOrEmpty(solutionId))
             {
-                var store = GetWritableSettingsStore();
-                if (!store.CollectionExists("NamedSolutionExplorer"))
+                var filepath = GetSettingsFilePath();
+                if (File.Exists(filepath))
                 {
-                    store.CreateCollection("NamedSolutionExplorer");
-                }
-
-                if (store.PropertyExists("NamedSolutionExplorer", solutionId))
-                {
-                    var settingsString = store.GetString("NamedSolutionExplorer", solutionId);
-
+                    var settingsString = File.ReadAllText(filepath);
                     var savedSettings = await NSESettings.FromString(settingsString);
 
-                    restoreSettings(savedSettings);
+                    await restoreSettings(savedSettings);
                 }
             }
         }
 
-        private Project GetParentProject(Project project)
-        {
-            try
-            {
-                return project.ParentProjectItem != null
-                    ? project.ParentProjectItem.ContainingProject
-                    : null;
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-        }
-
-        private void restoreSettings(NSESettings savedSettings)
+        private async Task restoreSettings(NSESettings savedSettings)
         {
             foreach (var settin in savedSettings.Settings)
             {
-                restoreWindow(settin);
+                await restoreWindow(settin);
             }
         }
 
-        private void restoreWindow(NSESettings.aNSE settin)
+        private async Task restoreWindow(NSESettings.aNSE settin)
         {
             if (string.IsNullOrEmpty(settin.HierarchyId)) return;
 
             // select the item in the solutionexplorer window
             var d = GetDTE() as DTE2;
-            var se = d.ToolWindows.SolutionExplorer;
+
+            var se = getOriginalSolutionExplorer(d);
+            var w = se.Parent;
+            w.Activate();
+
             try
             {
-                var found = se.GetItem(settin.HierarchyId);
+                var found = await FindItem(se, settin.HierarchyId);
+
                 if (found == null)
                 {
                     _log.DebugFormat("Failed to find item {0}", settin.HierarchyId);
@@ -98,17 +88,23 @@ namespace NamedSolutionExplorer
                 else
                 {
                     _log.InfoFormat("Selecting item {0}", settin.HierarchyId);
-                    // select item in the explorer
                     found.Select(vsUISelectionType.vsUISelectionTypeSelect);
-                    _viewer.OpenSEV();
-                    Console.WriteLine(found.Name);
+
+                    await _viewer.OpenSolutionExplorerViewAsync();
+                    _log.Debug("Found item " + found.Name);
                     // create a new window
                 }
             }
             catch (Exception e)
             {
+                Console.WriteLine("ARGH!" + e.ToString());
                 // ignore, couldnt find the item
             }
+        }
+
+        private UIHierarchy getOriginalSolutionExplorer(DTE2 dte2)
+        {
+            return (UIHierarchy)dte2.ToolWindows.GetToolWindow("Solution Explorer");
         }
 
         public async Task SaveSettings()
@@ -123,8 +119,17 @@ namespace NamedSolutionExplorer
                 }
 
                 var settings = await CreateSettings();
-                store.SetString("NamedSolutionExplorer", solutionId, settings.ToString());
+                string settingsFileName = GetSettingsFilePath();
+                File.WriteAllText(settingsFileName, settings.ToString());
             }
+        }
+
+        private string GetSettingsFilePath()
+        {
+            var dte = GetDTE();
+            var settingsFileName = Path.Combine(Path.GetDirectoryName(dte.Solution.FileName),
+                "namedsolutionexplorers.json");
+            return settingsFileName;
         }
 
         private async Task<NSESettings> CreateSettings()
@@ -138,7 +143,7 @@ namespace NamedSolutionExplorer
 
                 foreach (Window w in dte.Windows)
                 {
-                    if (IsSolutionExplorer(w))
+                    if (Utilities.IsSolutionExplorer(w))
                     {
                         AddSolutionExplorer(ret, w);
                     }
@@ -162,47 +167,43 @@ namespace NamedSolutionExplorer
 
         private string GetHierarchyId(Window window)
         {
-            if (!IsSolutionExplorer(window)) return null;
+            if (!Utilities.IsSolutionExplorer(window)) return null;
 
             UIHierarchy uiHierarchy = (UIHierarchy)window.Object;
 
             UIHierarchyItem firstItem = uiHierarchy.UIHierarchyItems.Item(1);
-
-            return GetObjectPath(firstItem);
+            var d2 = GetDTE() as DTE2;
+            return GetObjectIdentifier(d2, firstItem);
         }
 
-        public UIHierarchyItem FindItem(UIHierarchyItems Children, string FileName, ref string SolutionExplorerPath)
+        public async Task<UIHierarchyItem> FindItem(UIHierarchy solutionExplorerWindow, string uniqueName)
         {
-            foreach (UIHierarchyItem CurrentItem in Children)
-            {
-                string TypeName = CurrentItem.Object.GetType().Name;
-                if (TypeName == "ProjectItem")
-                {
-                    EnvDTE.ProjectItem projectitem = (EnvDTE.ProjectItem)CurrentItem.Object;
-                    short i = 1;
-                    while (i <= projectitem.FileCount)
-                    {
-                        if (projectitem.FileNames[i] == FileName)
-                        {
-                            SolutionExplorerPath = CurrentItem.Name;
-                            return CurrentItem;
-                        }
-                        i++;
-                    }
-                }
+            IVsHierarchy projectItem = null;
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-                UIHierarchyItem ChildItem = FindItem(CurrentItem.UIHierarchyItems, FileName, ref SolutionExplorerPath);
-                if (ChildItem != null)
-                {
-                    SolutionExplorerPath = CurrentItem.Name + @"\" + SolutionExplorerPath;
-                    return ChildItem;
-                }
+            try
+            {
+                var d2 = GetDTE() as DTE2;
+                var names = getNames(uniqueName);
+
+                var item = solutionExplorerWindow.GetItem(names);
+
+                return item;
+            }
+            catch (Exception e)
+            {
+                _log.Error("Error finding item " + uniqueName, e);
             }
 
             return null;
         }
 
-        private string GetObjectPath(UIHierarchyItem tgt)
+        private string getNames(string uniqueName)
+        {
+            return uniqueName.Replace(".csproj", "").Replace(".csProj", "");
+        }
+
+        private string GetObjectIdentifier(DTE2 dte2, UIHierarchyItem tgt)
         {
             var name = tgt.Name;
 
@@ -217,13 +218,14 @@ namespace NamedSolutionExplorer
             {
                 Debug.WriteLine("Project node is selected: " + selectedUIHierarchyItem.Name);
                 var project = tgt.Object as Project;
-                return project.UniqueName;
+                var p = getPath(dte2, project);
+                return p;
             }
             else if (selectedUIHierarchyItem.Object is EnvDTE.ProjectItem)
             {
                 Debug.WriteLine("Project item node is selected: " + selectedUIHierarchyItem.Name);
                 var pi = selectedUIHierarchyItem.Object as ProjectItem;
-                return pi.ContainingProject.UniqueName;
+                ;
             }
             else if (selectedUIHierarchyItem.Object is EnvDTE.Solution)
             {
@@ -234,21 +236,24 @@ namespace NamedSolutionExplorer
             return null;
         }
 
-        private string GetObjectPath(ProjectItem pi)
+        private string getPath(DTE2 dte2, Project project)
+        {
+            var solutionName = dte2.Solution.Properties.Item("Name").Value.ToString();
+            var projectName = project.Name;
+
+            return $"{solutionName}\\{projectName}";
+        }
+
+        private string GetObjectIdentifier(ProjectItem pi)
         {
             var ret = pi.Name;
 
-            return GetObjectPath(pi.ContainingProject) + "\\" + ret;
+            return GetObjectIdentifier(pi.ContainingProject) + "\\" + ret;
         }
 
-        private string GetObjectPath(Project p)
+        private string GetObjectIdentifier(Project p)
         {
             return "\\" + p.Name;
-        }
-
-        private bool IsSolutionExplorer(Window window)
-        {
-            return window.ObjectKind == EnvDTE.Constants.vsWindowKindSolutionExplorer;
         }
 
         private async Task<string> GetSolutionIdentifier()
@@ -266,6 +271,14 @@ namespace NamedSolutionExplorer
             var dte = (DTE)Package.GetGlobalService(typeof(DTE));
             if (dte == null) return null;
             return dte;
+        }
+    }
+
+    public static class Utilities
+    {
+        public static bool IsSolutionExplorer(Window window)
+        {
+            return window.ObjectKind == EnvDTE.Constants.vsWindowKindSolutionExplorer;
         }
     }
 }
