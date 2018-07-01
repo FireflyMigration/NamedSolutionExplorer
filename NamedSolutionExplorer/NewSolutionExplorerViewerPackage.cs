@@ -97,17 +97,17 @@ namespace NamedSolutionExplorer
 
         private void SolutionBeforeClose()
         {
-            Task.Run(async () => { await SolutionClosedAsync(); }).Wait();
+            //Task.Run(async () => { await SolutionClosedAsync(); }).Wait();
         }
 
-        private async Task SolutionClosedAsync()
-        {
-            // load the saved settings for this solution]
+        //private async Task SolutionClosedAsync()
+        //{
+        //    // load the saved settings for this solution]
+        //    //
+        //    //var svc = await GetNamedSolutionExplorerService();
 
-            var svc = await GetNamedSolutionExplorerService();
-
-            await svc.SaveSettings();
-        }
+        //    //await svc.SaveSettings();
+        //}
 
         private async Task<NamedSolutionExplorerViewerService> GetNamedSolutionExplorerService()
         {

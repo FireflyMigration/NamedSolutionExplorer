@@ -208,6 +208,8 @@ Backup*/
 UpgradeLog*.XML
 UpgradeLog*.htm
 
+vs_logs/
+
 # SQL Server files
 *.mdf
 *.ldf

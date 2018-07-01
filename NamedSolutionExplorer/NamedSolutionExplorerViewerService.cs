@@ -4,15 +4,15 @@ using EnvDTE80;
 
 using log4net;
 
-using Microsoft.VisualStudio.Settings;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
-using Microsoft.VisualStudio.Shell.Settings;
 
 using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
+
+using static Microsoft.VisualStudio.Shell.ServiceProvider;
 
 using Task = System.Threading.Tasks.Task;
 using Window = EnvDTE.Window;
@@ -24,75 +24,64 @@ namespace NamedSolutionExplorer
         private NewSolutionExplorerViewer _viewer;
         private ILog _log = LogManager.GetLogger(typeof(NamedSolutionExplorerViewerService));
         private IVsSolution _solutionService;
+        private SettingsRepository _repository;
+        private AsyncPackage _serviceProvider;
 
         public NamedSolutionExplorerViewerService()
         {
             _viewer = new NewSolutionExplorerViewer();
+            _repository = new SettingsRepository();
         }
 
         public async Task InitialiseAsync(AsyncPackage package)
         {
-            _solutionService = (IVsSolution)await ServiceProvider.GetGlobalServiceAsync(typeof(IVsSolution));
-            _viewer.InitialiseAsync(package);
-        }
+            _solutionService = (IVsSolution)await GetGlobalServiceAsync(typeof(IVsSolution));
+            _serviceProvider = package;
 
-        private WritableSettingsStore GetWritableSettingsStore()
-        {
-            var shellSettingsManager = new ShellSettingsManager(ServiceProvider.GlobalProvider);
-            return shellSettingsManager.GetWritableSettingsStore(SettingsScope.UserSettings);
+            _viewer.InitialiseAsync(package);
         }
 
         public async Task LoadAndApplySettings()
         {
-            var solutionId = await GetSolutionIdentifier();
-            if (!string.IsNullOrEmpty(solutionId))
+            var filepath = await GetSettingsFilePath();
+            if (File.Exists(filepath))
             {
-                var filepath = GetSettingsFilePath();
-                if (File.Exists(filepath))
-                {
-                    var settingsString = File.ReadAllText(filepath);
-                    var savedSettings = await NSESettings.FromString(settingsString);
-
-                    await restoreSettings(savedSettings);
-                }
+                await _repository.Load(filepath);
+                await restoreWindows();
             }
         }
 
-        private async Task restoreSettings(NSESettings savedSettings)
+        private async Task restoreWindows()
         {
-            foreach (var settin in savedSettings.Settings)
+            foreach (var config in _repository.WindowConfigs)
             {
-                await restoreWindow(settin);
+                await restoreWindow(config);
             }
         }
 
-        private async Task restoreWindow(NSESettings.aNSE settin)
+        private async Task restoreWindow(NamedSolutionExplorerWindowConfig windowConfig)
         {
-            if (string.IsNullOrEmpty(settin.HierarchyId)) return;
+            if (string.IsNullOrEmpty(windowConfig.HierarchyId)) return;
 
             // select the item in the solutionexplorer window
-            var d = GetDTE() as DTE2;
+            var d = (DTE2)await GetDTE();
 
-            var se = getOriginalSolutionExplorer(d);
-            var w = se.Parent;
-            w.Activate();
+            var solutionExplorer = GetAndActivateOriginalSolutionExplorer(d);
 
             try
             {
-                var found = await FindItem(se, settin.HierarchyId);
+                var found = await FindItem(solutionExplorer, windowConfig.HierarchyId);
 
                 if (found == null)
                 {
-                    _log.DebugFormat("Failed to find item {0}", settin.HierarchyId);
+                    _log.DebugFormat("Failed to find item {0}", windowConfig.HierarchyId);
                 }
                 else
                 {
-                    _log.InfoFormat("Selecting item {0}", settin.HierarchyId);
+                    _log.InfoFormat("Selecting item {0}", windowConfig.HierarchyId);
                     found.Select(vsUISelectionType.vsUISelectionTypeSelect);
 
-                    await _viewer.OpenSolutionExplorerViewAsync();
-                    _log.Debug("Found item " + found.Name);
-                    // create a new window
+                    await _viewer.OpenSolutionExplorerViewAsync(windowConfig.Name);
                 }
             }
             catch (Exception e)
@@ -102,62 +91,50 @@ namespace NamedSolutionExplorer
             }
         }
 
-        private UIHierarchy getOriginalSolutionExplorer(DTE2 dte2)
+        private UIHierarchy GetAndActivateOriginalSolutionExplorer(DTE2 dte2)
         {
-            return (UIHierarchy)dte2.ToolWindows.GetToolWindow("Solution Explorer");
+            var ret = (UIHierarchy)dte2.ToolWindows.GetToolWindow("Solution Explorer");
+
+            ret.Parent.Activate();
+
+            return ret;
         }
 
         public async Task SaveSettings()
         {
-            var solutionId = await GetSolutionIdentifier();
-            if (!string.IsNullOrEmpty(solutionId))
-            {
-                var store = GetWritableSettingsStore();
-                if (!store.CollectionExists("NamedSolutionExplorer"))
-                {
-                    store.CreateCollection("NamedSolutionExplorer");
-                }
-
-                var settings = await CreateSettings();
-                string settingsFileName = GetSettingsFilePath();
-                File.WriteAllText(settingsFileName, settings.ToString());
-            }
+            await AddSettingsToRepository();
+            var settingsFileName = await GetSettingsFilePath();
+            await _repository.Save(settingsFileName);
         }
 
-        private string GetSettingsFilePath()
+        private async Task<string> GetSettingsFilePath()
         {
-            var dte = GetDTE();
+            var dte = await GetDTE();
             var settingsFileName = Path.Combine(Path.GetDirectoryName(dte.Solution.FileName),
                 "namedsolutionexplorers.json");
             return settingsFileName;
         }
 
-        private async Task<NSESettings> CreateSettings()
+        private async Task AddSettingsToRepository()
         {
-            return await Task.Run<NSESettings>(() =>
+            // get all NSE windows
+            var dte = await GetDTE();
+
+            foreach (Window w in dte.Windows)
             {
-                var ret = new NSESettings();
-
-                // get all NSE windows
-                var dte = GetDTE();
-
-                foreach (Window w in dte.Windows)
+                if (Utilities.IsSolutionExplorer(w))
                 {
-                    if (Utilities.IsSolutionExplorer(w))
-                    {
-                        AddSolutionExplorer(ret, w);
-                    }
+                    AddSolutionExplorer(w);
                 }
-                return ret;
-            });
+            }
         }
 
-        private void AddSolutionExplorer(NSESettings ret, Window window)
+        private void AddSolutionExplorer(Window window)
         {
             var hierarchyId = GetHierarchyId(window);
             var name = GetName(window);
             if (!string.IsNullOrEmpty(hierarchyId) && !string.IsNullOrEmpty(name))
-                ret.Add(new NSESettings.aNSE(hierarchyId, name));
+                _repository.AddOrReplace(new NamedSolutionExplorerWindowConfig(hierarchyId, name));
         }
 
         private string GetName(Window window)
@@ -172,18 +149,16 @@ namespace NamedSolutionExplorer
             UIHierarchy uiHierarchy = (UIHierarchy)window.Object;
 
             UIHierarchyItem firstItem = uiHierarchy.UIHierarchyItems.Item(1);
-            var d2 = GetDTE() as DTE2;
+            var d2 = (DTE2)GetDTE().Result;
             return GetObjectIdentifier(d2, firstItem);
         }
 
         public async Task<UIHierarchyItem> FindItem(UIHierarchy solutionExplorerWindow, string uniqueName)
         {
-            IVsHierarchy projectItem = null;
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
             try
             {
-                var d2 = GetDTE() as DTE2;
                 var names = getNames(uniqueName);
 
                 var item = solutionExplorerWindow.GetItem(names);
@@ -203,21 +178,19 @@ namespace NamedSolutionExplorer
             return uniqueName.Replace(".csproj", "").Replace(".csProj", "");
         }
 
-        private string GetObjectIdentifier(DTE2 dte2, UIHierarchyItem tgt)
+        private string GetObjectIdentifier(DTE2 dte2, UIHierarchyItem selectedUIHierarchyItem)
         {
-            var name = tgt.Name;
+            var name = selectedUIHierarchyItem.Name;
 
-            if (tgt.Collection == null)
+            if (selectedUIHierarchyItem.Collection == null)
             {
                 return name;
             }
 
-            var selectedUIHierarchyItem = tgt;
-
-            if (tgt.Object is EnvDTE.Project)
+            if (selectedUIHierarchyItem.Object is EnvDTE.Project)
             {
                 Debug.WriteLine("Project node is selected: " + selectedUIHierarchyItem.Name);
-                var project = tgt.Object as Project;
+                var project = selectedUIHierarchyItem.Object as Project;
                 var p = getPath(dte2, project);
                 return p;
             }
@@ -244,41 +217,9 @@ namespace NamedSolutionExplorer
             return $"{solutionName}\\{projectName}";
         }
 
-        private string GetObjectIdentifier(ProjectItem pi)
+        private async Task<DTE> GetDTE()
         {
-            var ret = pi.Name;
-
-            return GetObjectIdentifier(pi.ContainingProject) + "\\" + ret;
-        }
-
-        private string GetObjectIdentifier(Project p)
-        {
-            return "\\" + p.Name;
-        }
-
-        private async Task<string> GetSolutionIdentifier()
-        {
-            return await Task.Run<string>(() =>
-            {
-                var dte = GetDTE();
-
-                return dte.Solution.FullName;
-            });
-        }
-
-        private DTE GetDTE()
-        {
-            var dte = (DTE)Package.GetGlobalService(typeof(DTE));
-            if (dte == null) return null;
-            return dte;
-        }
-    }
-
-    public static class Utilities
-    {
-        public static bool IsSolutionExplorer(Window window)
-        {
-            return window.ObjectKind == EnvDTE.Constants.vsWindowKindSolutionExplorer;
+            return (DTE)await _serviceProvider.GetServiceAsync(typeof(DTE));
         }
     }
 }

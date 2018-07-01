@@ -72,7 +72,7 @@ namespace NamedSolutionExplorer
 
         private class DontSaveSettings : EventArgs { }
 
-        public async System.Threading.Tasks.Task OpenSolutionExplorerViewAsync()
+        public async System.Threading.Tasks.Task OpenSolutionExplorerViewAsync(string windowName = null)
         {
             DTE2 dte = await GetService<DTE>() as DTE2;
             renamedExistingSolutionExplorerWindows(dte);
@@ -82,7 +82,7 @@ namespace NamedSolutionExplorer
             {
                 // solutionexplorer automatically points to the last one created
 
-                renameCurrentSolutionExplorerWindowToFirstItemInList(dte);
+                renameCurrentSolutionExplorerWindowToFirstItemInList(dte, (item) => string.IsNullOrEmpty(windowName) ? getNameFromHierarchyItem(item) : windowName);
             });
         }
 
@@ -101,17 +101,17 @@ namespace NamedSolutionExplorer
             await svc.SaveSettings();
         }
 
-        private void renameCurrentSolutionExplorerWindowToFirstItemInList(DTE2 dte)
+        private void renameCurrentSolutionExplorerWindowToFirstItemInList(DTE2 dte, Func<UIHierarchyItem, string> newCaptionFunc)
         {
             UIHierarchy UIH = dte.ToolWindows.SolutionExplorer;
 
             UIHierarchyItem UIHItem = UIH.UIHierarchyItems.Item(1);
-            var newCaption = getWindowName(UIHItem);
+            var newCaption = newCaptionFunc(UIHItem);
             UIH.Parent.Caption = newCaption;
             setSolutionExplorerToolWindowCaption(newCaption);
         }
 
-        private static string getWindowName(UIHierarchyItem uihItem)
+        private static string getNameFromHierarchyItem(UIHierarchyItem uihItem)
         {
             var name = uihItem.Name;
             var pi = uihItem.Object as ProjectItem;
@@ -149,7 +149,7 @@ namespace NamedSolutionExplorer
 
         private static async System.Threading.Tasks.Task waitUntilWindowOpened(DTE2 dte)
         {
-            await System.Threading.Tasks.Task.Delay(new TimeSpan(0, 0, 5));
+            await System.Threading.Tasks.Task.Delay(new TimeSpan(0, 0, 1));
         }
 
         private static int getSolutionExplorerWindowsCount(DTE2 dte)
