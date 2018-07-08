@@ -60,7 +60,6 @@ namespace NamedSolutionExplorer
 
         int IVsSolutionEvents.OnBeforeCloseSolution(object pUnkReserved)
         {
-            OnBeforeCloseSolution();
             return VSConstants.S_OK;
         }
 
@@ -76,6 +75,8 @@ namespace NamedSolutionExplorer
 
         int IVsSolutionEvents.OnQueryCloseSolution(object pUnkReserved, ref int pfCancel)
         {
+            OnBeforeCloseSolution();
+
             return VSConstants.S_OK;
         }
 

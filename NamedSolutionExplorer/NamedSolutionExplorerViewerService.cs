@@ -81,7 +81,7 @@ namespace NamedSolutionExplorer
                     _log.InfoFormat("Selecting item {0}", windowConfig.HierarchyId);
                     found.Select(vsUISelectionType.vsUISelectionTypeSelect);
 
-                    await _viewer.OpenSolutionExplorerViewAsync(windowConfig.Name);
+                    await _viewer.OpenSolutionExplorerViewAsync(windowConfig);
                 }
             }
             catch (Exception e)
@@ -119,22 +119,46 @@ namespace NamedSolutionExplorer
         {
             // get all NSE windows
             var dte = await GetDTE();
+            var uiShell = (IVsUIShell)await GetGlobalServiceAsync(typeof(IVsUIShell));
 
             foreach (Window w in dte.Windows)
             {
                 if (Utilities.IsSolutionExplorer(w))
                 {
-                    AddSolutionExplorer(w);
+                    await AddSolutionExplorerAsync(w, uiShell);
                 }
             }
         }
 
-        private void AddSolutionExplorer(Window window)
+        private async Task AddSolutionExplorerAsync(Window window, IVsUIShell uiShell)
+        {
+            var config = await CreateConfigAsync(window, uiShell);
+            if (config != null)
+            {
+                _repository.AddOrReplace(config);
+            }
+        }
+
+        private async Task<NamedSolutionExplorerWindowConfig> CreateConfigAsync(Window window, IVsUIShell uiShell)
         {
             var hierarchyId = GetHierarchyId(window);
+
             var name = GetName(window);
             if (!string.IsNullOrEmpty(hierarchyId) && !string.IsNullOrEmpty(name))
-                _repository.AddOrReplace(new NamedSolutionExplorerWindowConfig(hierarchyId, name));
+            {
+                var ret = new NamedSolutionExplorerWindowConfig(hierarchyId, name);
+                ret.SizeAndPosition = await GetSizeAndPositionAsync(window, uiShell);
+
+                return ret;
+            }
+
+            return null;
+        }
+
+        private async Task<SizeAndPosition> GetSizeAndPositionAsync(Window window, IVsUIShell uiShell)
+        {
+            var ret = await SizeAndPosition.FromWindowAsync(window, uiShell);
+            return ret;
         }
 
         private string GetName(Window window)
@@ -164,6 +188,10 @@ namespace NamedSolutionExplorer
                 var item = solutionExplorerWindow.GetItem(names);
 
                 return item;
+            }
+            catch (ArgumentException)
+            {
+                _log.Info("Couldn't restore item " + uniqueName + " as couldnt find it in explorer");
             }
             catch (Exception e)
             {

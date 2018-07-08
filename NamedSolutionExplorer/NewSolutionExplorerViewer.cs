@@ -72,18 +72,35 @@ namespace NamedSolutionExplorer
 
         private class DontSaveSettings : EventArgs { }
 
-        public async System.Threading.Tasks.Task OpenSolutionExplorerViewAsync(string windowName = null)
+        public async System.Threading.Tasks.Task OpenSolutionExplorerViewAsync(NamedSolutionExplorerWindowConfig config = null)
         {
             DTE2 dte = await GetService<DTE>() as DTE2;
+            var uiShell = await GetService<SVsUIShell>() as IVsUIShell;
+
             renamedExistingSolutionExplorerWindows(dte);
 
             // call the "open visual studio new menu view"
-            await openNewScopedExplorerWindow(dte).ContinueWith(_ =>
+            await openNewScopedExplorerWindow(dte).ContinueWith(async _ =>
             {
                 // solutionexplorer automatically points to the last one created
+                var windowName = config?.Name;
 
                 renameCurrentSolutionExplorerWindowToFirstItemInList(dte, (item) => string.IsNullOrEmpty(windowName) ? getNameFromHierarchyItem(item) : windowName);
+
+                // position the window
+                if (config?.SizeAndPosition != null)
+                {
+                    var window = dte.ToolWindows.SolutionExplorer;
+
+                    await restorePosition(window, config, uiShell);
+                }
             });
+        }
+
+        private async Task restorePosition(UIHierarchy window, NamedSolutionExplorerWindowConfig config, IVsUIShell uiShell)
+        {
+            if (config.SizeAndPosition != null)
+                await config.SizeAndPosition.ApplyToAsync(window.Parent, uiShell);
         }
 
         private void OpenSolutionExplorerView(object sender, EventArgs e)
