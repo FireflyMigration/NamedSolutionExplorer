@@ -4,9 +4,13 @@ namespace NamedSolutionExplorer
 {
     public static class Utilities
     {
+        #region Public Methods
+
         public static bool IsSolutionExplorer(Window window)
         {
-            return window.ObjectKind == EnvDTE.Constants.vsWindowKindSolutionExplorer;
+            return window.ObjectKind == Constants.vsWindowKindSolutionExplorer;
         }
+
+        #endregion
     }
 }

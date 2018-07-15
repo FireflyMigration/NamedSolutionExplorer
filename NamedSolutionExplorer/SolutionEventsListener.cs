@@ -1,22 +1,23 @@
-﻿using Microsoft.VisualStudio;
+﻿using System;
+using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell.Interop;
-
-using System;
 
 namespace NamedSolutionExplorer
 {
     /// <summary>
-    /// Listens to events
-    /// https://github.com/ServiceStack/Bundler/blob/master/src/vs/BundlerRunOnSave/SolutionEventsListener.cs
+    ///     Listens to events
+    ///     https://github.com/ServiceStack/Bundler/blob/master/src/vs/BundlerRunOnSave/SolutionEventsListener.cs
     /// </summary>
     public class SolutionEventsListener : IVsSolutionEvents, IDisposable
     {
+        #region Private Vars
+
         private IVsSolution solution;
         private uint solutionEventsCookie;
 
-        public event Action OnAfterOpenSolution;
+        #endregion
 
-        public event Action OnBeforeCloseSolution;
+        #region Constructors
 
         public SolutionEventsListener(IVsSolution solution)
         {
@@ -25,10 +26,36 @@ namespace NamedSolutionExplorer
             solution.AdviseSolutionEvents(this, out solutionEventsCookie);
         }
 
+        #endregion
+
+        #region Private Methods
+
         private void InitNullEvents()
         {
             OnAfterOpenSolution += () => { };
         }
+
+        #endregion
+
+        #region IDisposable Members
+
+        public void Dispose()
+        {
+            if (solution != null && solutionEventsCookie != 0)
+            {
+                GC.SuppressFinalize(this);
+                solution.UnadviseSolutionEvents(solutionEventsCookie);
+                OnAfterOpenSolution = null;
+                solutionEventsCookie = 0;
+                solution = null;
+            }
+        }
+
+        #endregion IDisposable Members
+
+        public event Action OnAfterOpenSolution;
+
+        public event Action OnBeforeCloseSolution;
 
         #region IVsSolutionEvents Members
 
@@ -86,21 +113,5 @@ namespace NamedSolutionExplorer
         }
 
         #endregion IVsSolutionEvents Members
-
-        #region IDisposable Members
-
-        public void Dispose()
-        {
-            if (solution != null && solutionEventsCookie != 0)
-            {
-                GC.SuppressFinalize(this);
-                solution.UnadviseSolutionEvents(solutionEventsCookie);
-                OnAfterOpenSolution = null;
-                solutionEventsCookie = 0;
-                solution = null;
-            }
-        }
-
-        #endregion IDisposable Members
     }
 }

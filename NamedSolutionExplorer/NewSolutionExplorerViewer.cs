@@ -4,77 +4,67 @@
 // </copyright>
 //------------------------------------------------------------------------------
 
-using EnvDTE;
-
-using EnvDTE80;
-
-using log4net;
-
-using Microsoft.VisualStudio.Shell;
-using Microsoft.VisualStudio.Shell.Interop;
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Linq;
 using System.Threading.Tasks;
-
+using EnvDTE;
+using EnvDTE80;
+using log4net;
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
+using NamedSolutionExplorer.Models;
+using Constants = EnvDTE.Constants;
 using Task = System.Threading.Tasks.Task;
 
 namespace NamedSolutionExplorer
 {
     /// <summary>
-    /// Command handler
+    ///     Command handler
     /// </summary>
     internal class NewSolutionExplorerViewer
     {
-        private static ILog _log = LogManager.GetLogger(typeof(NewSolutionExplorerViewer));
+        #region Statics
 
         /// <summary>
-        /// Command ID.
+        ///     Command ID.
         /// </summary>
         public const int CommandId = 0x0100;
 
+        private static readonly ILog _log = LogManager.GetLogger(typeof(NewSolutionExplorerViewer));
+
         /// <summary>
-        /// Command menu group (command set GUID).
+        ///     Command menu group (command set GUID).
         /// </summary>
         public static readonly Guid CommandSet = new Guid("2910728c-1593-479d-9a07-8ee1fe3e8e55");
 
+        #endregion
+
+        #region Private Vars
+
         private AsyncPackage _package;
+
+        #endregion
+
+        #region Public Methods
 
         public async void InitialiseAsync(AsyncPackage package)
         {
             _package = package;
-            OleMenuCommandService commandService = await package.GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
+            var commandService = await package.GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
             if (commandService != null)
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                 var menuCommandID = new CommandID(CommandSet, CommandId);
-                var menuItem = new MenuCommand(this.OpenSolutionExplorerView, menuCommandID);
+                var menuItem = new MenuCommand(OpenSolutionExplorerView, menuCommandID);
                 commandService.AddCommand(menuItem);
             }
         }
 
-        private async Task<T> GetService<T>()
+        public async Task OpenSolutionExplorerViewAsync(NamedSolutionExplorerWindowConfig config = null)
         {
-            return (T)await _package.GetServiceAsync(typeof(T));
-        }
-
-        private async void setSolutionExplorerToolWindowCaption(string caption)
-        {
-            IVsWindowFrame frame = null;
-            var shell = await GetService<IVsUIShell>();
-
-            shell.FindToolWindow((uint)__VSFINDTOOLWIN.FTW_fFrameOnly, new Guid(ToolWindowGuids.SolutionExplorer), out frame);
-
-            frame.SetProperty((int)__VSFPROPID.VSFPROPID_Caption, caption);
-        }
-
-        private class DontSaveSettings : EventArgs { }
-
-        public async System.Threading.Tasks.Task OpenSolutionExplorerViewAsync(NamedSolutionExplorerWindowConfig config = null)
-        {
-            DTE2 dte = await GetService<DTE>() as DTE2;
+            var dte = await GetService<DTE>() as DTE2;
             var uiShell = await GetService<SVsUIShell>() as IVsUIShell;
 
             renamedExistingSolutionExplorerWindows(dte);
@@ -85,7 +75,8 @@ namespace NamedSolutionExplorer
                 // solutionexplorer automatically points to the last one created
                 var windowName = config?.Name;
 
-                renameCurrentSolutionExplorerWindowToFirstItemInList(dte, (item) => string.IsNullOrEmpty(windowName) ? getNameFromHierarchyItem(item) : windowName);
+                renameCurrentSolutionExplorerWindowToFirstItemInList(dte,
+                    item => string.IsNullOrEmpty(windowName) ? getNameFromHierarchyItem(item) : windowName);
 
                 // position the window
                 if (config?.SizeAndPosition != null)
@@ -97,10 +88,60 @@ namespace NamedSolutionExplorer
             });
         }
 
-        private async Task restorePosition(UIHierarchy window, NamedSolutionExplorerWindowConfig config, IVsUIShell uiShell)
+        #endregion
+
+        #region Private Methods
+
+        private static void activateSolutionExplorerWindow(DTE2 dte)
         {
-            if (config.SizeAndPosition != null)
-                await config.SizeAndPosition.ApplyToAsync(window.Parent, uiShell);
+            dte.Windows.Item(Constants.vsWindowKindSolutionExplorer).Activate();
+        }
+
+        private static string getNameFromHierarchyItem(UIHierarchyItem uihItem)
+        {
+            var name = uihItem.Name;
+            var pi = uihItem.Object as ProjectItem;
+            if (pi != null && pi.ContainingProject != null)
+                name = string.Format("{0} ({1})", name, pi.ContainingProject.Name);
+
+            return name;
+        }
+
+        private async Task<T> GetService<T>()
+        {
+            return (T) await _package.GetServiceAsync(typeof(T));
+        }
+
+        private static int getSolutionExplorerWindowsCount(DTE2 dte)
+        {
+            var ret = 0;
+            foreach (Window w in dte.Windows)
+                if (Utilities.IsSolutionExplorer(w))
+                    ret++;
+
+            return ret;
+        }
+
+        private static async Task openNewScopedExplorerWindow(DTE2 dte)
+        {
+            await Task.Run(async () =>
+            {
+                var commands = dte.Commands.Cast<Command>();
+                activateSolutionExplorerWindow(dte);
+                var openSolutionView =
+                    commands.FirstOrDefault(
+                        x => x.Name == "ProjectandSolutionContextMenus.Project.SolutionExplorer.NewScopedWindow");
+                if (openSolutionView != null)
+                    if (openSolutionView.IsAvailable)
+                    {
+                        dte.Commands.Raise(openSolutionView.Guid, openSolutionView.ID, null, null);
+                        await waitUntilWindowOpened(dte);
+                    }
+                    else
+                    {
+                        _log.Debug("NewScopedWindow not yet available");
+                    }
+            });
         }
 
         private void OpenSolutionExplorerView(object sender, EventArgs e)
@@ -112,98 +153,67 @@ namespace NamedSolutionExplorer
             });
         }
 
+        private void renameCurrentSolutionExplorerWindowToFirstItemInList(DTE2 dte,
+            Func<UIHierarchyItem, string> newCaptionFunc)
+        {
+            var UIH = dte.ToolWindows.SolutionExplorer;
+
+            var UIHItem = UIH.UIHierarchyItems.Item(1);
+            var newCaption = newCaptionFunc(UIHItem);
+            UIH.Parent.Caption = newCaption;
+            setSolutionExplorerToolWindowCaption(newCaption);
+        }
+
+        private static void renamedExistingSolutionExplorerWindows(DTE2 dte)
+        {
+            var list = new List<Window>();
+            foreach (Window w in dte.Windows)
+                if (w.Caption == "Solution Explorer")
+                    list.Add(w);
+
+            if (list.Count > 1)
+                for (var i = 1; i < list.Count; i++)
+                    list[i].Caption = $"Solution Explorer {i}";
+        }
+
+        private async Task restorePosition(UIHierarchy window, NamedSolutionExplorerWindowConfig config,
+            IVsUIShell uiShell)
+        {
+            if (config.SizeAndPosition != null)
+                await config.SizeAndPosition.ApplyToAsync(window.Parent, uiShell);
+        }
+
         private async void saveSettings()
         {
             var svc = await GetService<NamedSolutionExplorerViewerService>();
             await svc.SaveSettings();
         }
 
-        private void renameCurrentSolutionExplorerWindowToFirstItemInList(DTE2 dte, Func<UIHierarchyItem, string> newCaptionFunc)
+        private async void setSolutionExplorerToolWindowCaption(string caption)
         {
-            UIHierarchy UIH = dte.ToolWindows.SolutionExplorer;
+            IVsWindowFrame frame = null;
+            var shell = await GetService<IVsUIShell>();
 
-            UIHierarchyItem UIHItem = UIH.UIHierarchyItems.Item(1);
-            var newCaption = newCaptionFunc(UIHItem);
-            UIH.Parent.Caption = newCaption;
-            setSolutionExplorerToolWindowCaption(newCaption);
+            shell.FindToolWindow((uint) __VSFINDTOOLWIN.FTW_fFrameOnly, new Guid(ToolWindowGuids.SolutionExplorer),
+                out frame);
+
+            frame.SetProperty((int) __VSFPROPID.VSFPROPID_Caption, caption);
         }
 
-        private static string getNameFromHierarchyItem(UIHierarchyItem uihItem)
+        private static async Task waitUntilWindowOpened(DTE2 dte)
         {
-            var name = uihItem.Name;
-            var pi = uihItem.Object as ProjectItem;
-            if (pi != null && pi.ContainingProject != null)
-            {
-                name = string.Format("{0} ({1})", name, pi.ContainingProject.Name);
-            }
-
-            return name;
+            await Task.Delay(new TimeSpan(0, 0, 1));
         }
 
-        private static async System.Threading.Tasks.Task openNewScopedExplorerWindow(DTE2 dte)
+        #endregion
+
+        #region Nested Types
+
+        private class DontSaveSettings : EventArgs
         {
-            await System.Threading.Tasks.Task.Run(async () =>
-            {
-                var commands = dte.Commands.Cast<Command>();
-                activateSolutionExplorerWindow(dte);
-                var openSolutionView =
-                    commands.FirstOrDefault(
-                        x => x.Name == "ProjectandSolutionContextMenus.Project.SolutionExplorer.NewScopedWindow");
-                if (openSolutionView != null)
-                {
-                    if (openSolutionView.IsAvailable)
-                    {
-                        dte.Commands.Raise(openSolutionView.Guid, openSolutionView.ID, null, null);
-                        await waitUntilWindowOpened(dte);
-                    }
-                    else
-                    {
-                        _log.Debug("NewScopedWindow not yet available");
-                    }
-                }
-            });
         }
 
-        private static async System.Threading.Tasks.Task waitUntilWindowOpened(DTE2 dte)
-        {
-            await System.Threading.Tasks.Task.Delay(new TimeSpan(0, 0, 1));
-        }
-
-        private static int getSolutionExplorerWindowsCount(DTE2 dte)
-        {
-            var ret = 0;
-            foreach (Window w in dte.Windows)
-            {
-                if (Utilities.IsSolutionExplorer(w)) ret++;
-            }
-
-            return ret;
-        }
-
-        private static void activateSolutionExplorerWindow(DTE2 dte)
-        {
-            dte.Windows.Item(EnvDTE.Constants.vsWindowKindSolutionExplorer).Activate();
-        }
-
-        private static void renamedExistingSolutionExplorerWindows(DTE2 dte)
-        {
-            List<Window> list = new List<Window>();
-            foreach (Window w in dte.Windows)
-            {
-                if (w.Caption == "Solution Explorer")
-                {
-                    list.Add(w);
-                }
-            }
-
-            if (list.Count > 1)
-            {
-                for (int i = 1; i < list.Count; i++)
-                {
-                    list[i].Caption = $"Solution Explorer {i}";
-                }
-            }
-        }
+        #endregion
 
         ///// <summary>
         ///// This function is the callback used to execute the command when the menu item is clicked.
