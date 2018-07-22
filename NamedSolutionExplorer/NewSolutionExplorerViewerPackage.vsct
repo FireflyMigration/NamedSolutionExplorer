@@ -75,14 +75,14 @@
           If you do not want an image next to your command, remove the Icon node /> -->
       <Button guid="guidNewSolutionExplorerViewerPackageCmdSet" id="NewSolutionExplorerViewerId" priority="0x0100" type="Button">
         <Parent guid="guidNewSolutionExplorerViewerPackageCmdSet" id="MyMenuGroup" />
-        <Icon guid="guidImages" id="bmpPic1" />
+
         <Strings>
           <ButtonText>New Named Solution Explorer View</ButtonText>
         </Strings>
       </Button>
       <Button guid="guidRenameSolutionExplorerCmdSet" id="cmdidRenameSolutionExplorerCommand" priority="0x0100" type="Button">
-        <Parent guid="guidRenameSolutionExplorerCmdSet" id="MyMenuGroup" />
-        <Icon guid="guidImages1" id="bmpPic1" />
+        <Parent guid="guidNewSolutionExplorerViewerPackageCmdSet" id="MyMenuGroup" />
+
         <Strings>
           <ButtonText>Rename Solution Explorer View</ButtonText>
         </Strings>
