@@ -45,8 +45,19 @@
       <Group guid="guidNewSolutionExplorerViewerPackageCmdSet" id="MyMenuGroup" priority="0x0100">
         <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_FOLDERNODE" />
       </Group>
-
       <Group guid="guidNewSolutionExplorerViewerPackageCmdSet" id="MyMenuGroup" priority="0x0100">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_PROJNODE" />
+      </Group>
+      <Group guid="guidRenameSolutionExplorerCmdSet" id="MyMenuGroup" priority="0x0100">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_SOLNNODE" />
+      </Group>
+      <Group guid="guidRenameSolutionExplorerCmdSet" id="MyMenuGroup" priority="0x0100">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_SOLNFOLDER" />
+      </Group>
+      <Group guid="guidRenameSolutionExplorerCmdSet" id="MyMenuGroup" priority="0x0100">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_FOLDERNODE" />
+      </Group>
+      <Group guid="guidRenameSolutionExplorerCmdSet" id="MyMenuGroup" priority="0x0100">
         <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_PROJNODE" />
       </Group>
     </Groups>
@@ -64,9 +75,16 @@
           If you do not want an image next to your command, remove the Icon node /> -->
       <Button guid="guidNewSolutionExplorerViewerPackageCmdSet" id="NewSolutionExplorerViewerId" priority="0x0100" type="Button">
         <Parent guid="guidNewSolutionExplorerViewerPackageCmdSet" id="MyMenuGroup" />
-        <Icon guid="guidImages" id="bmpPic1" />
+
         <Strings>
           <ButtonText>New Named Solution Explorer View</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidRenameSolutionExplorerCmdSet" id="cmdidRenameSolutionExplorerCommand" priority="0x0100" type="Button">
+        <Parent guid="guidNewSolutionExplorerViewerPackageCmdSet" id="MyMenuGroup" />
+
+        <Strings>
+          <ButtonText>Rename Solution Explorer View</ButtonText>
         </Strings>
       </Button>
     </Buttons>
@@ -79,6 +97,7 @@
             inside a button definition. An important aspect of this declaration is that the element id
             must be the actual index (1-based) of the bitmap inside the bitmap strip. -->
       <Bitmap guid="guidImages" href="Resources\NewSolutionExplorerViewer.png" usedList="bmpPic1, bmpPic2, bmpPicSearch, bmpPicX, bmpPicArrows, bmpPicStrikethrough" />
+      <Bitmap guid="guidImages1" href="Resources\RenameSolutionExplorerCommand.png" usedList="bmpPic1, bmpPic2, bmpPicSearch, bmpPicX, bmpPicArrows, bmpPicStrikethrough" />
     </Bitmaps>
   </Commands>
 
@@ -93,6 +112,20 @@
     </GuidSymbol>
 
     <GuidSymbol name="guidImages" value="{795f4158-74ba-45dd-9dce-358a8591e421}">
+      <IDSymbol name="bmpPic1" value="1" />
+      <IDSymbol name="bmpPic2" value="2" />
+      <IDSymbol name="bmpPicSearch" value="3" />
+      <IDSymbol name="bmpPicX" value="4" />
+      <IDSymbol name="bmpPicArrows" value="5" />
+      <IDSymbol name="bmpPicStrikethrough" value="6" />
+    </GuidSymbol>
+
+    <GuidSymbol value="{59e02eb3-7904-4165-84f5-51fce173f18d}" name="guidRenameSolutionExplorerCmdSet">
+      <IDSymbol value="4128" name="MyMenuGroup" />
+      <IDSymbol value="256" name="cmdidRenameSolutionExplorerCommand" />
+    </GuidSymbol>
+
+    <GuidSymbol value="{7246b438-c733-4579-a033-2922cec95877}" name="guidImages1">
       <IDSymbol name="bmpPic1" value="1" />
       <IDSymbol name="bmpPic2" value="2" />
       <IDSymbol name="bmpPicSearch" value="3" />

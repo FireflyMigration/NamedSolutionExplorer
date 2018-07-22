@@ -8,177 +8,216 @@ using EnvDTE;
 
 using EnvDTE80;
 
+using log4net;
+
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+
+using NamedSolutionExplorer.Models;
 
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Linq;
+using System.Threading.Tasks;
 
-namespace ContextMenuOnSolutionExplorer
+using Constants = EnvDTE.Constants;
+using Task = System.Threading.Tasks.Task;
+
+namespace NamedSolutionExplorer
 {
     /// <summary>
-    /// Command handler
+    ///     Command handler
     /// </summary>
-    internal sealed class NewSolutionExplorerViewer
+    internal class NewSolutionExplorerViewer
     {
-        /// <summary>
-        /// Command ID.
-        /// </summary>
-        public const int CommandId = 0x0100;
+        #region Statics
 
         /// <summary>
-        /// Command menu group (command set GUID).
+        ///     Command ID.
         /// </summary>
-        public static readonly Guid CommandSet = new Guid("2910728c-1593-479d-9a07-8ee1fe3e8e55");
+        public const int NewNamedSolutionExplorerCommandId = 0x0100;
+
+        public const int RenameSolutionExplorerCommandId = 0x0100;
+
+        private static readonly ILog _log = LogManager.GetLogger(typeof(NewSolutionExplorerViewer));
 
         /// <summary>
-        /// VS Package that provides this command, not null.
+        ///     Command menu group (command set GUID).
         /// </summary>
-        private readonly Package package;
+        public static readonly Guid NewNamedSolutionExplorerCommandSet = new Guid("2910728c-1593-479d-9a07-8ee1fe3e8e55");
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="NewSolutionExplorerViewer"/> class.
-        /// Adds our command handlers for menu (commands must exist in the command table file)
-        /// </summary>
-        /// <param name="package">Owner package, not null.</param>
-        private NewSolutionExplorerViewer(Package package)
+        public static readonly Guid RenameSolutionExplorerCommandSet = new Guid("59e02eb3-7904-4165-84f5-51fce173f18d");
+
+        #endregion Statics
+
+        #region Private Vars
+
+        private AsyncPackage _package;
+
+        #endregion Private Vars
+
+        #region Public Methods
+
+        public async void InitialiseAsync(AsyncPackage package)
         {
-            if (package == null)
-            {
-                throw new ArgumentNullException("package");
-            }
-
-            this.package = package;
-
-            OleMenuCommandService commandService = this.ServiceProvider.GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
+            _package = package;
+            var commandService = await package.GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
             if (commandService != null)
             {
-                var menuCommandID = new CommandID(CommandSet, CommandId);
-                var menuItem = new MenuCommand(this.OpenSolutionExplorerView, menuCommandID);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                var renameCommandID = new CommandID(RenameSolutionExplorerCommandSet, RenameSolutionExplorerCommandId);
+                var renameMenuItem = new MenuCommand(RenameSolutionExplorerWindow, renameCommandID);
+                commandService.AddCommand(renameMenuItem);
+
+                var menuCommandID = new CommandID(NewNamedSolutionExplorerCommandSet, NewNamedSolutionExplorerCommandId);
+                var menuItem = new MenuCommand(OpenSolutionExplorerView, menuCommandID);
                 commandService.AddCommand(menuItem);
             }
         }
 
-        private IVsUIShell GetUIShell()
+        public void RenameSolutionExplorerWindow(object sender, EventArgs e)
         {
-            IVsUIShell uiShell;
+            Task.Run(async () =>
+            {
+                var dte = await GetService<DTE>() as DTE2;
 
-            uiShell = (IVsUIShell)this.ServiceProvider.GetService(typeof(SVsUIShell));
-            return uiShell;
+                var w = dte.ActiveWindow;
+                if (Utilities.IsSolutionExplorer(w))
+                {
+                    var newName = await PromptUserForNewCaption(w);
+
+                    if (!string.IsNullOrEmpty(newName))
+                    {
+                        await setWindowDockedCaption(w, newName);
+                    }
+                }
+            });
         }
 
-        private void setSolutionExplorerToolWindowCaption(string caption)
+        private async Task<string> PromptUserForNewCaption(Window window)
         {
-            IVsWindowFrame frame = null;
-            var shell = GetUIShell();
+            var existingCaption = window.Caption;
+            var result = await RenameDialogWindow.GetNewCaption(existingCaption);
 
-            shell.FindToolWindow((uint)__VSFINDTOOLWIN.FTW_fFrameOnly, new Guid(ToolWindowGuids.SolutionExplorer), out frame);
-
-            frame.SetProperty((int)__VSFPROPID.VSFPROPID_Caption, caption);
+            return result;
         }
 
-        private void OpenSolutionExplorerView(object sender, EventArgs e)
+        public async Task OpenSolutionExplorerViewAsync(NamedSolutionExplorerWindowConfig config = null)
         {
-            DTE2 dte = (DTE2)this.ServiceProvider.GetService(typeof(DTE));
+            var dte = await GetService<DTE>() as DTE2;
+
             renamedExistingSolutionExplorerWindows(dte);
 
             // call the "open visual studio new menu view"
+            await openNewScopedExplorerWindow(dte).ContinueWith(async _ =>
+            {
+                // solutionexplorer automatically points to the last one created
+                var windowName = config?.Name;
 
-            openNewScopedExplorerWindow(dte);
-
-            // solutionexplorer automatically points to the last one created
-            renameCurrentSolutionExplorerWindowToFirstItemInList(dte);
+                await renameCurrentSolutionExplorerWindow(dte,
+                    item => string.IsNullOrEmpty(windowName) ? getNameFromHierarchyItem(item) : windowName);
+            });
         }
 
-        private void renameCurrentSolutionExplorerWindowToFirstItemInList(DTE2 dte)
+        #endregion Public Methods
+
+        #region Private Methods
+
+        private static void activateSolutionExplorerWindow(DTE2 dte)
         {
-            UIHierarchy UIH = dte.ToolWindows.SolutionExplorer;
-
-            var pa = UIH.Parent;
-
-            UIHierarchyItem UIHItem = UIH.UIHierarchyItems.Item(1);
-            var newCaption = getWindowName(UIHItem);
-            UIH.Parent.Caption = newCaption;
-            setSolutionExplorerToolWindowCaption(newCaption);
-
-            //UIH.Parent.SetKind(vsWindowType.vsWindowTypeToolWindow);
-            var fm = UIH.Parent.Object as ToolWindowPane;
+            dte.Windows.Item(Constants.vsWindowKindSolutionExplorer).Activate();
         }
 
-        private static string getWindowName(UIHierarchyItem uihItem)
+        private static string getNameFromHierarchyItem(UIHierarchyItem uihItem)
         {
             var name = uihItem.Name;
             var pi = uihItem.Object as ProjectItem;
             if (pi != null && pi.ContainingProject != null)
-            {
                 name = string.Format("{0} ({1})", name, pi.ContainingProject.Name);
-            }
 
             return name;
         }
 
-        private static void openNewScopedExplorerWindow(DTE2 dte)
+        private async Task<T> GetService<T>()
         {
-            var commands = dte.Commands.Cast<Command>();
-            var openSolutionView =
-                commands.FirstOrDefault(
-                    x => x.Name == "ProjectandSolutionContextMenus.Project.SolutionExplorer.NewScopedWindow");
-            if (openSolutionView != null)
+            return (T)await _package.GetServiceAsync(typeof(T));
+        }
+
+        private static async Task openNewScopedExplorerWindow(DTE2 dte)
+        {
+            await Task.Run(async () =>
             {
-                dte.Commands.Raise(openSolutionView.Guid, openSolutionView.ID, null, null);
-            }
+                var commands = dte.Commands.Cast<Command>();
+                activateSolutionExplorerWindow(dte);
+                var openSolutionView =
+                    commands.FirstOrDefault(
+                        x => x.Name == "ProjectandSolutionContextMenus.Project.SolutionExplorer.NewScopedWindow");
+                if (openSolutionView != null)
+                    if (openSolutionView.IsAvailable)
+                    {
+                        dte.Commands.Raise(openSolutionView.Guid, openSolutionView.ID, null, null);
+                        await waitUntilWindowOpened(dte);
+                    }
+                    else
+                    {
+                        _log.Debug("NewScopedWindow not yet available");
+                    }
+            });
+        }
+
+        private void OpenSolutionExplorerView(object sender, EventArgs e)
+        {
+            Task.Run(async () => { await OpenSolutionExplorerViewAsync(); });
+        }
+
+        private async Task renameCurrentSolutionExplorerWindow(DTE2 dte,
+            Func<UIHierarchyItem, string> newCaptionFunc)
+        {
+            var UIH = dte.ToolWindows.SolutionExplorer;
+            var wnd = UIH.Parent;
+            var UIHItem = UIH.UIHierarchyItems.Item(1);
+
+            var newCaption = newCaptionFunc(UIHItem);
+            UIH.Parent.Caption = newCaption;
+            await setWindowDockedCaption(wnd, newCaption);
         }
 
         private static void renamedExistingSolutionExplorerWindows(DTE2 dte)
         {
-            List<Window> list = new List<Window>();
+            var list = new List<Window>();
             foreach (Window w in dte.Windows)
-            {
                 if (w.Caption == "Solution Explorer")
-                {
                     list.Add(w);
-                }
-            }
 
             if (list.Count > 1)
-            {
-                for (int i = 1; i < list.Count; i++)
-                {
+                for (var i = 1; i < list.Count; i++)
                     list[i].Caption = $"Solution Explorer {i}";
-                }
-            }
         }
 
-        /// <summary>
-        /// Gets the instance of the command.
-        /// </summary>
-        public static NewSolutionExplorerViewer Instance
+        private async Task setWindowDockedCaption(Window wnd, string newCaption)
         {
-            get;
-            private set;
+            var shell = await GetService<IVsUIShell>();
+
+            var frame = Utilities.GetWindowFrameFromWindow(wnd, shell);
+            frame.SetProperty((int)__VSFPROPID.VSFPROPID_Caption, newCaption);
         }
 
-        /// <summary>
-        /// Gets the service provider from the owner package.
-        /// </summary>
-        private IServiceProvider ServiceProvider
+        private static async Task waitUntilWindowOpened(DTE2 dte)
         {
-            get
-            {
-                return this.package;
-            }
+            await Task.Delay(new TimeSpan(0, 0, 1));
         }
 
-        /// <summary>
-        /// Initializes the singleton instance of the command.
-        /// </summary>
-        /// <param name="package">Owner package, not null.</param>
-        public static void Initialize(Package package)
+        #endregion Private Methods
+
+        #region Nested Types
+
+        private class DontSaveSettings : EventArgs
         {
-            Instance = new NewSolutionExplorerViewer(package);
         }
+
+        #endregion Nested Types
 
         ///// <summary>
         ///// This function is the callback used to execute the command when the menu item is clicked.
