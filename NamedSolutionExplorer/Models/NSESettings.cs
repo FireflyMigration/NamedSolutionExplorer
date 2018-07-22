@@ -1,11 +1,8 @@
-﻿using EnvDTE;
-
+﻿using System;
+using System.Threading.Tasks;
+using EnvDTE;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
-
-using System;
-using System.Threading.Tasks;
-
 using Task = System.Threading.Tasks.Task;
 
 namespace NamedSolutionExplorer.Models
@@ -20,7 +17,7 @@ namespace NamedSolutionExplorer.Models
             Name = name;
         }
 
-        #endregion Constructors
+        #endregion
 
         #region Properties
 
@@ -29,7 +26,7 @@ namespace NamedSolutionExplorer.Models
 
         public SizeAndPosition SizeAndPosition { get; set; }
 
-        #endregion Properties
+        #endregion
     }
 
     public class SizeAndPosition
@@ -44,7 +41,7 @@ namespace NamedSolutionExplorer.Models
         public int Width { get; set; }
         public string WindowState { get; set; }
 
-        #endregion Properties
+        #endregion
 
         #region Public Methods
 
@@ -82,11 +79,11 @@ namespace NamedSolutionExplorer.Models
             ret.Left = pcx;
             ret.Top = pcy;
 
-            ret.DockPosition = (VSSETFRAMEPOS)result;
+            ret.DockPosition = (VSSETFRAMEPOS) result;
 
             return ret;
         }
 
-        #endregion Public Methods
+        #endregion
     }
 }

@@ -4,16 +4,17 @@
 // </copyright>
 //------------------------------------------------------------------------------
 
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Shell;
-
-using System.Threading.Tasks;
 
 namespace NamedSolutionExplorer
 {
     public class RenameDialogWindow
     {
-        public async static Task<string> GetNewCaption(string existingCaption)
+        #region Public Methods
+
+        public static async Task<string> GetNewCaption(string existingCaption)
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
@@ -22,12 +23,11 @@ namespace NamedSolutionExplorer
             var newTitle = string.Empty;
             var prompt = "Enter new title";
 
-            if (TextInputDialog.Show(title, prompt, def, out newTitle))
-            {
-                return newTitle;
-            }
+            if (TextInputDialog.Show(title, prompt, def, out newTitle)) return newTitle;
 
             return null;
         }
+
+        #endregion
     }
 }

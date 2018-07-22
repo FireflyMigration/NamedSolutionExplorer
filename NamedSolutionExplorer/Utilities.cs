@@ -1,9 +1,6 @@
-﻿using EnvDTE;
-
+﻿using System;
+using EnvDTE;
 using Microsoft.VisualStudio.Shell.Interop;
-
-using System;
-
 using Constants = EnvDTE.Constants;
 
 namespace NamedSolutionExplorer
@@ -11,11 +8,6 @@ namespace NamedSolutionExplorer
     public static class Utilities
     {
         #region Public Methods
-
-        public static bool IsSolutionExplorer(Window window)
-        {
-            return window.ObjectKind == Constants.vsWindowKindSolutionExplorer;
-        }
 
         public static IVsWindowFrame GetFrame(Window w, IVsUIShell uiShell)
         {
@@ -27,7 +19,7 @@ namespace NamedSolutionExplorer
             var slotGuid = guid;
             IVsWindowFrame wndFrame;
 
-            uiShell.FindToolWindow((uint)__VSFINDTOOLWIN.FTW_fFrameOnly, ref slotGuid, out wndFrame);
+            uiShell.FindToolWindow((uint) __VSFINDTOOLWIN.FTW_fFrameOnly, ref slotGuid, out wndFrame);
             return wndFrame;
         }
 
@@ -40,6 +32,11 @@ namespace NamedSolutionExplorer
             return GetWindowFrameFromGuid(new Guid(window.ObjectKind), uiShell);
         }
 
-        #endregion Public Methods
+        public static bool IsSolutionExplorer(Window window)
+        {
+            return window.ObjectKind == Constants.vsWindowKindSolutionExplorer;
+        }
+
+        #endregion
     }
 }

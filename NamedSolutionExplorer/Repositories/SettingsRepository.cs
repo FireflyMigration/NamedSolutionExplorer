@@ -1,8 +1,7 @@
-﻿using NamedSolutionExplorer.Models;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using NamedSolutionExplorer.Models;
 
 namespace NamedSolutionExplorer.Repositories
 {
@@ -10,16 +9,16 @@ namespace NamedSolutionExplorer.Repositories
     {
         #region Private Vars
 
-        private List<NamedSolutionExplorerWindowConfig> _windowConfigs =
+        private readonly List<NamedSolutionExplorerWindowConfig> _windowConfigs =
             new List<NamedSolutionExplorerWindowConfig>();
 
-        #endregion Private Vars
+        #endregion
 
         #region Properties
 
         public IEnumerable<NamedSolutionExplorerWindowConfig> WindowConfigs => _windowConfigs.AsEnumerable();
 
-        #endregion Properties
+        #endregion
 
         #region Public Methods
 
@@ -30,7 +29,7 @@ namespace NamedSolutionExplorer.Repositories
             _windowConfigs.Add(config);
         }
 
-        #endregion Public Methods
+        #endregion
 
         #region Nested Types
 
@@ -40,9 +39,9 @@ namespace NamedSolutionExplorer.Repositories
 
             public NamedSolutionExplorerWindowConfig[] Settings { get; set; }
 
-            #endregion Properties
+            #endregion
         }
 
-        #endregion Nested Types
+        #endregion
     }
 }
