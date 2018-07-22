@@ -1,8 +1,11 @@
-﻿using System;
-using System.Threading.Tasks;
-using EnvDTE;
+﻿using EnvDTE;
+
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+
+using System;
+using System.Threading.Tasks;
+
 using Task = System.Threading.Tasks.Task;
 
 namespace NamedSolutionExplorer.Models
@@ -49,7 +52,7 @@ namespace NamedSolutionExplorer.Models
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-            var frame = GetFrame(w, uiShell);
+            var frame = Utilities.GetFrame(w, uiShell);
             var relativeTo = Guid.Empty;
 
             frame.SetFramePos(DockPosition, relativeTo, 0, 0, Left, Top);
@@ -57,7 +60,7 @@ namespace NamedSolutionExplorer.Models
 
         public static async Task<SizeAndPosition> FromWindowAsync(Window w, IVsUIShell uiShell)
         {
-            var frame = GetFrame(w, uiShell);
+            var frame = Utilities.GetFrame(w, uiShell);
 
             Guid pguidRelativeTo;
             int px;
@@ -85,32 +88,5 @@ namespace NamedSolutionExplorer.Models
         }
 
         #endregion Public Methods
-
-        #region Private Methods
-
-        private static IVsWindowFrame GetFrame(Window w, IVsUIShell uiShell)
-        {
-            return GetWindowFrameFromWindow(w, uiShell);
-        }
-
-        private static IVsWindowFrame GetWindowFrameFromGuid(Guid guid, IVsUIShell uiShell)
-        {
-            var slotGuid = guid;
-            IVsWindowFrame wndFrame;
-
-            uiShell.FindToolWindow((uint)__VSFINDTOOLWIN.FTW_fFrameOnly, ref slotGuid, out wndFrame);
-            return wndFrame;
-        }
-
-        private static IVsWindowFrame GetWindowFrameFromWindow(Window window, IVsUIShell uiShell)
-        {
-            if (window == null)
-                return null;
-            if (window.ObjectKind == null || window.ObjectKind == string.Empty)
-                return null;
-            return GetWindowFrameFromGuid(new Guid(window.ObjectKind), uiShell);
-        }
-
-        #endregion Private Methods
     }
 }

@@ -4,15 +4,18 @@
 // </copyright>
 //------------------------------------------------------------------------------
 
+using log4net.Config;
+
+using Microsoft.VisualStudio;
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
+
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using log4net.Config;
-using Microsoft.VisualStudio;
-using Microsoft.VisualStudio.Shell;
-using Microsoft.VisualStudio.Shell.Interop;
+
 using Task = System.Threading.Tasks.Task;
 
 namespace NamedSolutionExplorer
@@ -51,13 +54,13 @@ namespace NamedSolutionExplorer
         /// </summary>
         public const string PackageGuidString = "56b3b1d1-ef94-475a-9744-f701f1731c78";
 
-        #endregion
+        #endregion Statics
 
         #region Private Vars
 
         private SolutionEventsListener _eventsListener;
 
-        #endregion
+        #endregion Private Vars
 
         #region Constructors
 
@@ -66,7 +69,7 @@ namespace NamedSolutionExplorer
             XmlConfigurator.Configure();
         }
 
-        #endregion
+        #endregion Constructors
 
         #region Package Members
 
@@ -99,7 +102,6 @@ namespace NamedSolutionExplorer
         {
             var svc = new NamedSolutionExplorerViewerService();
             await svc.InitialiseAsync(this);
-            await svc.LoadAndApplySettings();
 
             return svc;
         }
@@ -120,11 +122,7 @@ namespace NamedSolutionExplorer
 
         private async Task SolutionClosedAsync()
         {
-            // load the saved settings for this solution]
-            //
-            var svc = await GetNamedSolutionExplorerService();
-
-            await svc.SaveSettings();
+            // do nothing
         }
 
         private async Task<NamedSolutionExplorerViewerService> GetNamedSolutionExplorerService()
@@ -135,13 +133,7 @@ namespace NamedSolutionExplorer
 
         private async Task SolutionLoadedAsync()
         {
-            // load the saved settings for this solution]
-            await Task.Run(async () =>
-            {
-                var svc = await GetNamedSolutionExplorerService();
-
-                await svc.LoadAndApplySettings();
-            });
+            // do nothing
         }
 
         private void SolutionLoaded()
