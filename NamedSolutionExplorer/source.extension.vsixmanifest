@@ -3,7 +3,7 @@
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011"
                  xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
     <Metadata>
-        <Identity Id="NamedSolutionExplorerSolutionExplorer.leo.a47a9170-9342-4388-8216-f154ab73de78" Version="1.4"
+        <Identity Id="NamedSolutionExplorerSolutionExplorer.leo.a47a9170-9342-4388-8216-f154ab73de78" Version="1.5"
                   Language="en-US" Publisher="Firefly" />
         <DisplayName>NamedSolutionExplorer</DisplayName>
         <Description xml:space="preserve">Creates named SolutionExplorer windows and allows you to rename them</Description>
