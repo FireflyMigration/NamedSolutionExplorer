@@ -4,9 +4,10 @@
                  xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
     <Metadata>
         <Identity Id="NamedSolutionExplorerSolutionExplorer.leo.a47a9170-9342-4388-8216-f154ab73de78" Version="1.4"
-                  Language="en-US" Publisher="KWRA" />
+                  Language="en-US" Publisher="Firefly" />
         <DisplayName>NamedSolutionExplorer</DisplayName>
-        <Description xml:space="preserve">Creates named SE windows</Description>
+        <Description xml:space="preserve">Creates named SolutionExplorer windows and allows you to rename them</Description>
+        <MoreInfo>https://github.com/FireflyMigration/NamedSolutionExplorer</MoreInfo>
     </Metadata>
     <Installation>
         <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[15.0,15.0]" />
